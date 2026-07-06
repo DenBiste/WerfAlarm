@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vrije Baan — check je fietsroute op wegenwerken</title>
+<meta name="description" content="Laad je GPX en zie meteen elke werf, afsluiting en hinder op je route. Live GIPOD-data van Hinder in kaart, voor heel Vlaanderen.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚧</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ======================= HERO ======================= -->
+<header class="hero">
+  <nav class="topbar">
+    <span class="brand"><span class="brand-stripe"></span>VRIJE BAAN</span>
+    <a class="navlink" href="#hoe">Hoe werkt het</a>
+    <a class="navlink" href="#app">Naar de check</a>
+  </nav>
+
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <p class="kicker">Voor wie zijn eigen routes tekent</p>
+      <h1>Geen werf<br>op je parcours.</h1>
+      <p class="lede">Laad je GPX en zie in enkele seconden élke wegenwerf, afsluiting en
+      omleiding op je route — met de exacte kilometerpunten. Live data uit
+      <strong>GIPOD</strong>, dezelfde bron als Hinder&nbsp;in&nbsp;kaart van de Vlaamse overheid.</p>
+      <div class="hero-cta">
+        <button id="ctaLoad" class="btn btn-primary">Laad je GPX</button>
+        <a href="#hoe" class="btn btn-ghost">Hoe werkt het?</a>
+      </div>
+      <p class="hero-note">Werkt met exports uit Komoot, Strava, Garmin, RideWithGPS… · Heel Vlaanderen · Gratis, zonder account</p>
+    </div>
+
+    <!-- decorative route illustration -->
+    <div class="hero-art" aria-hidden="true">
+      <svg viewBox="0 0 420 360" xmlns="http://www.w3.org/2000/svg">
+        <path class="art-route" d="M30 330 C 90 300, 60 220, 140 200 S 250 240, 300 170 S 260 60, 380 40"/>
+        <path class="art-werf" d="M140 200 C 190 190, 230 230, 300 170"/>
+        <circle cx="30" cy="330" r="9" class="art-start"/>
+        <circle cx="380" cy="40" r="9" class="art-finish"/>
+        <g class="art-cone" transform="translate(212,186)">
+          <polygon points="0,-26 12,10 -12,10"/>
+          <rect x="-18" y="10" width="36" height="7" rx="3"/>
+          <rect x="-7.5" y="-14" width="15" height="6" fill="#fff"/>
+        </g>
+        <g class="art-badge" transform="translate(212,246)">
+          <rect x="-46" y="-16" width="92" height="32" rx="8"/>
+          <text x="0" y="6" text-anchor="middle">KM 54.3</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <div class="barrier" aria-hidden="true"></div>
+</header>
+
+<!-- ======================= STEPS ======================= -->
+<section id="hoe" class="steps">
+  <h2>Van GPX naar gerust vertrekken, in drie stappen</h2>
+  <div class="steps-grid">
+    <article class="step">
+      <span class="step-nr">1</span>
+      <h3>Laad je route</h3>
+      <p>Sleep je GPX-bestand hierheen of kies het via de knop. Tracks van elke app of fietscomputer werken.</p>
+    </article>
+    <article class="step">
+      <span class="step-nr">2</span>
+      <h3>Kies datum &amp; marge</h3>
+      <p>Wanneer rij je, en hoe ver naast je track wil je kijken? Op <b>0&nbsp;m</b> zie je enkel hinder die je track zélf kruist.</p>
+    </article>
+    <article class="step">
+      <span class="step-nr">3</span>
+      <h3>Zie elke werf</h3>
+      <p>De getroffen wegvakken lichten op langs je route, met km-punt, periode en gevolgen. Herteken, of vertrek met een gerust hart.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ======================= APP ======================= -->
+<main id="app" class="app">
+  <div class="toolbar">
+    <label class="btn btn-primary filebtn">Laad GPX…<input type="file" id="gpxfile" accept=".gpx,application/gpx+xml"></label>
+    <span id="routeinfo" class="routeinfo">Nog geen route geladen — of sleep een GPX op de kaart</span>
+    <div class="field">
+      <label for="ridedate">Ritdatum</label>
+      <input type="date" id="ridedate">
+    </div>
+    <div class="field">
+      <label for="range" title="Hoe ver naast je track gezocht wordt. 0 = enkel hinder die je track zelf raakt of kruist.">Zoekafstand (m)</label>
+      <input type="number" id="range" min="0" max="250" step="10" value="100">
+    </div>
+    <button id="run" class="btn btn-dark" disabled>Controleer route</button>
+    <button id="copy" class="btn btn-ghost" disabled>Kopieer resultaat</button>
+    <span id="status" class="status">Laad eerst een GPX-bestand.</span>
+  </div>
+  <div id="bar" class="bar"><i></i></div>
+
+  <div class="workspace">
+    <div id="map" class="map"></div>
+    <aside id="results" class="results">
+      <div id="error" class="error"></div>
+      <div id="out">
+        <div id="empty" class="empty">
+          <span class="empty-icon">🚴</span>
+          Laad een GPX-bestand en klik op <b>Controleer route</b>.<br>
+          We bevragen de open GIPOD-databank langs jouw track en tonen enkel hinder
+          die actief is op je ritdatum, binnen de gekozen zoekafstand
+          (0&nbsp;m&nbsp;= enkel op de route zelf).
+        </div>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<!-- ======================= FOOTER ======================= -->
+<footer class="footer">
+  <div class="barrier thin" aria-hidden="true"></div>
+  <div class="footer-inner">
+    <span><b>Vrije Baan</b> · hindercheck voor fietsroutes</span>
+    <span id="footroute"></span>
+    <span>Bron: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (geo.api.vlaanderen.be) — innames &amp; gevalideerde hinder, vandaag tot +6 maanden, enkel Vlaanderen. Kaart © OpenStreetMap.</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="js/geometry.js"></script>
+<script src="js/gpx.js"></script>
+<script src="js/gipod.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
