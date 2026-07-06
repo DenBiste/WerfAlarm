@@ -1,154 +1,199 @@
 /* =========================================================
-   VRIJE BAAN — hindercheck voor fietsroutes
-   Design: Vlaamse koers × werfsignalisatie
+   WERFALARM — hindercheck voor fietsroutes
+   Redesign 2026: tactile signage-brutalism
+   · typografie als architectuur (viewport-geschaalde variabele font)
+   · bento-grid met nette mobiele collapse
+   · harde offset-schaduwen, zichtbare randen, korrel
+   · functionele micro-interacties, scroll-reveals (CSS-only)
+   · dopamine-oranje op krijtwit, AA-contrast, reduced-motion-proof
    ========================================================= */
 :root{
-  --asphalt:#17191D;         /* donker wegdek */
-  --asphalt-2:#22262C;
-  --chalk:#FAFAF7;           /* krijtwit */
+  --chalk:#F4F2EC;           /* krijtwit (Cloud Dancer-achtig) */
   --paper:#FFFFFF;
-  --panel:#F2F3F0;
-  --line:#E1E3DE;
-  --ink:#20242A;
-  --muted:#5F6772;
-  --orange:#E8590C;          /* werfsignalisatie */
+  --ink:#141619;             /* asfalt-zwart */
+  --muted:#565E68;
+  --line:#141619;            /* randen = inkt: tactiel, geen grijs */
+  --soft:#E3E1D9;
+  --orange:#F4590B;          /* signalisatie, opgeschroefd */
   --orange-deep:#D9480F;
-  --orange-bg:#FDEEE4;
-  --route:#2F5AA8;           /* GPS-spoor blauw */
+  --orange-bg:#FFE8D9;
+  --yellow:#FFD43B;          /* veiligheidsgeel accent */
+  --route:#2F5AA8;
   --ok:#2B8A3E;
-  --radius:10px;
-  --shadow:0 10px 30px rgba(23,25,29,.10);
-  --font-display:"Barlow Condensed",system-ui,sans-serif;
-  --font-body:"Barlow",system-ui,sans-serif;
+  --shadow:6px 6px 0 var(--ink);       /* harde offset-schaduw */
+  --shadow-sm:4px 4px 0 var(--ink);
+  --radius:14px;
+  --font:"Archivo",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;font-family:var(--font-body);color:var(--ink);background:var(--chalk);line-height:1.55}
+body{margin:0;font-family:var(--font);color:var(--ink);background:var(--chalk);line-height:1.55;
+  /* subtiele korrel: tactiel, ~0 bytes extra */
+  background-image:radial-gradient(rgba(20,22,25,.05) 1px, transparent 1px);
+  background-size:5px 5px}
 a{color:inherit}
 ::selection{background:var(--orange);color:#fff}
+:focus-visible{outline:3px solid var(--route);outline-offset:2px}
 
-/* ---------- barrier stripe motif (nadar/werfhek) ---------- */
-.barrier{height:14px;background:repeating-linear-gradient(-45deg,
-  var(--orange) 0 18px, #fff 18px 36px)}
+/* ---------- barrier / nadar-motief ---------- */
+.barrier{height:14px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,#fff 18px 36px)}
 .barrier.thin{height:8px}
 
-/* =========================== HERO =========================== */
-.hero{background:
-  radial-gradient(1000px 500px at 85% -10%, #2E3440 0%, transparent 60%),
-  var(--asphalt);
-  color:var(--chalk);position:relative;overflow:hidden}
-.topbar{display:flex;align-items:center;gap:26px;padding:18px clamp(20px,5vw,56px)}
-.brand{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:.06em;display:flex;align-items:center;gap:10px;margin-right:auto}
-.brand-stripe{width:26px;height:16px;background:repeating-linear-gradient(-45deg,var(--orange) 0 6px,#fff 6px 12px);border-radius:3px}
-.navlink{font-size:14px;font-weight:600;text-decoration:none;color:#C8CCD2;transition:color .15s}
-.navlink:hover{color:#fff}
-.hero-inner{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr);gap:40px;align-items:center;
-  padding:clamp(28px,6vw,72px) clamp(20px,5vw,56px) clamp(40px,7vw,88px);max-width:1200px;margin:0 auto}
-.kicker{font-family:var(--font-display);font-weight:700;font-size:15px;letter-spacing:.22em;text-transform:uppercase;color:var(--orange);margin:0 0 10px}
-.hero h1{font-family:var(--font-display);font-weight:800;font-size:clamp(52px,7.5vw,96px);line-height:.92;letter-spacing:.005em;text-transform:uppercase;margin:0 0 18px}
-.lede{font-size:clamp(16px,1.5vw,19px);color:#C8CCD2;max-width:52ch;margin:0 0 26px}
-.lede strong{color:#fff}
-.hero-cta{display:flex;gap:14px;flex-wrap:wrap}
-.hero-note{font-size:13px;color:#8B929C;margin-top:18px}
+/* =========================== TOPBAR =========================== */
+.topbar{position:sticky;top:0;z-index:1200;display:flex;align-items:center;gap:24px;
+  padding:14px clamp(16px,4vw,44px);background:color-mix(in srgb,var(--chalk) 82%,transparent);
+  backdrop-filter:blur(10px);border-bottom:2px solid var(--ink)}
+.brand{font-weight:800;font-stretch:118%;font-size:21px;letter-spacing:.05em;display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand em{font-style:normal;color:var(--orange)}
+.brand-stripe{width:26px;height:16px;background:repeating-linear-gradient(-45deg,var(--orange) 0 6px,#fff 6px 12px);border:2px solid var(--ink);border-radius:4px}
+.navlink{font-size:14px;font-weight:600;text-decoration:none;padding:6px 2px;border-bottom:2px solid transparent;transition:border-color .15s}
+.navlink:hover{border-color:var(--orange)}
+.navlink-cta{border:2px solid var(--ink);border-radius:99px;padding:6px 16px;background:var(--yellow);box-shadow:3px 3px 0 var(--ink);transition:transform .12s,box-shadow .12s}
+.navlink-cta:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink);border-color:var(--ink)}
 
-/* hero illustration */
-.hero-art svg{width:100%;height:auto;display:block}
-.art-route{fill:none;stroke:var(--route);stroke-width:7;stroke-linecap:round;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4))}
-.art-werf{fill:none;stroke:var(--orange);stroke-width:9;stroke-linecap:round;stroke-dasharray:16 12;animation:crawl 1.6s linear infinite}
-@keyframes crawl{to{stroke-dashoffset:-28}}
-.art-start{fill:var(--ok);stroke:#fff;stroke-width:3}
-.art-finish{fill:#fff;stroke:var(--route);stroke-width:3}
-.art-cone polygon,.art-cone rect{fill:var(--orange)}
-.art-cone rect:last-of-type{fill:#fff}
-.art-badge rect{fill:#fff}
-.art-badge text{font-family:var(--font-display);font-weight:800;font-size:19px;fill:var(--asphalt);letter-spacing:.04em}
+/* =========================== HERO: TYPE ALS ARCHITECTUUR =========================== */
+.hero{padding:clamp(28px,5vw,64px) clamp(16px,4vw,44px) clamp(30px,4vw,56px);max-width:1400px;margin:0 auto}
+.mega{margin:0;font-weight:900;font-stretch:120%;text-transform:uppercase;
+  font-size:clamp(56px,11.5vw,170px);line-height:.88;letter-spacing:-.01em}
+.mega-line{display:block;animation:rise .6s cubic-bezier(.2,.8,.2,1) both}
+.mega-line:nth-child(2){animation-delay:.08s;margin-left:clamp(20px,6vw,120px)}
+.mega-line:nth-child(3){animation-delay:.16s}
+@keyframes rise{from{opacity:0;transform:translateY(.35em)}to{opacity:1;transform:none}}
+.hl{color:var(--orange);position:relative;white-space:nowrap}
+.hl::after{content:"";position:absolute;left:0;right:0;bottom:.02em;height:.09em;
+  background:repeating-linear-gradient(-45deg,var(--orange) 0 12px,var(--ink) 12px 24px)}
+.dot{color:var(--orange)}
+.hero-row{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start;justify-content:space-between;
+  margin-top:clamp(22px,3vw,40px);padding-top:22px;border-top:2px solid var(--ink)}
+.lede{font-size:clamp(16px,1.6vw,20px);max-width:56ch;margin:0;color:var(--ink)}
+.lede strong{background:var(--yellow);padding:0 4px;border-radius:4px}
+.hero-cta{display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.hero-note{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
+
+/* =========================== MARQUEE (kinetische typografie) =========================== */
+.marquee{overflow:hidden;background:var(--ink);color:var(--chalk);border-block:2px solid var(--ink);padding:10px 0}
+.marquee-track{display:flex;width:max-content;animation:scroll 26s linear infinite}
+.marquee span{font-weight:800;font-stretch:115%;font-size:17px;letter-spacing:.14em;white-space:nowrap;padding-right:1em}
+.marquee span::selection{background:var(--yellow);color:var(--ink)}
+@keyframes scroll{to{transform:translateX(-50%)}}
+.marquee:hover .marquee-track{animation-play-state:paused}
+
+/* =========================== BENTO =========================== */
+.bento-wrap{max-width:1400px;margin:0 auto;padding:clamp(36px,5vw,64px) clamp(16px,4vw,44px)}
+.section-title{font-weight:900;font-stretch:118%;text-transform:uppercase;
+  font-size:clamp(26px,3.6vw,44px);letter-spacing:0;margin:0 0 24px}
+.bento{display:grid;gap:16px;grid-template-columns:repeat(6,1fr)}
+.cell{background:var(--paper);border:2px solid var(--ink);border-radius:var(--radius);
+  padding:22px;box-shadow:var(--shadow);transition:transform .15s,box-shadow .15s}
+.cell:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+.cell-step{grid-column:span 2}
+.cell-stat{grid-column:span 2;display:flex;flex-direction:column;justify-content:flex-end;min-height:150px}
+.cell-live{grid-column:span 2;position:relative}
+.cell-orange{background:var(--orange);color:#fff}
+.cell-orange p{color:#fff}
+.step-nr{font-weight:900;font-stretch:120%;font-size:15px;letter-spacing:.12em;color:var(--orange);
+  border:2px solid var(--ink);border-radius:99px;padding:2px 12px;display:inline-block;background:var(--paper);box-shadow:var(--shadow-sm);margin-bottom:12px}
+.cell h3{font-weight:800;font-stretch:112%;font-size:20px;text-transform:uppercase;letter-spacing:.02em;margin:0 0 6px}
+.cell p{margin:0;font-size:14.5px;color:var(--muted)}
+.stat{font-weight:900;font-stretch:122%;font-size:clamp(52px,5.5vw,76px);line-height:.9}
+.stat small{font-size:.35em;font-weight:800;letter-spacing:.06em;margin-left:4px}
+.pulse{position:absolute;top:22px;right:22px;width:14px;height:14px;border-radius:50%;background:var(--ok);border:2px solid var(--ink)}
+.pulse::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid var(--ok);animation:ping 1.8s ease-out infinite}
+@keyframes ping{from{transform:scale(.5);opacity:1}to{transform:scale(1.5);opacity:0}}
+
+/* CSS-only scroll-reveal (progressief; valt terug op gewoon zichtbaar) */
+@supports (animation-timeline: view()){
+  .reveal{animation:reveal .5s ease-out both;animation-timeline:view();animation-range:entry 0% entry 55%}
+  @keyframes reveal{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+}
 
 /* =========================== BUTTONS =========================== */
-.btn{font:inherit;font-weight:700;font-size:15px;padding:12px 22px;border-radius:var(--radius);
-  border:2px solid transparent;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;
-  transition:transform .12s,background .15s,border-color .15s}
-.btn:active{transform:translateY(1px)}
-.btn:focus-visible{outline:3px solid var(--route);outline-offset:2px}
-.btn[disabled]{opacity:.45;cursor:default;transform:none}
+.btn{font:inherit;font-weight:800;font-stretch:110%;font-size:15px;padding:12px 22px;border-radius:12px;
+  border:2px solid var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:10px;
+  box-shadow:var(--shadow-sm);transition:transform .12s,box-shadow .12s,background .15s}
+.btn:hover:not([disabled]){transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.btn:active:not([disabled]){transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.btn[disabled]{opacity:.45;cursor:default;box-shadow:var(--shadow-sm)}
 .btn-primary{background:var(--orange);color:#fff}
 .btn-primary:hover:not([disabled]){background:var(--orange-deep)}
+.btn-big{font-size:18px;padding:16px 28px;border-radius:14px}
+.btn-big .arrow{transition:transform .15s}
+.btn-big:hover .arrow{transform:translateX(4px)}
 .btn-dark{background:var(--ink);color:#fff}
-.btn-dark:hover:not([disabled]){background:#000}
-.btn-ghost{background:transparent;color:inherit;border-color:currentColor}
-.hero .btn-ghost{color:#C8CCD2}
-.hero .btn-ghost:hover{color:#fff}
-.app .btn-ghost{color:var(--ink)}
+.btn-ghost{background:var(--paper);color:var(--ink)}
 .filebtn{position:relative;overflow:hidden}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
 
-/* =========================== STEPS =========================== */
-.steps{max-width:1200px;margin:0 auto;padding:clamp(40px,6vw,72px) clamp(20px,5vw,56px)}
-.steps h2{font-family:var(--font-display);font-weight:800;font-size:clamp(28px,3.4vw,40px);text-transform:uppercase;letter-spacing:.01em;margin:0 0 28px}
-.steps-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.step{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:22px 22px 18px;position:relative;box-shadow:var(--shadow)}
-.step-nr{font-family:var(--font-display);font-weight:800;font-size:44px;color:var(--orange);line-height:1;display:block;margin-bottom:6px}
-.step h3{font-family:var(--font-display);font-weight:700;font-size:21px;text-transform:uppercase;letter-spacing:.03em;margin:0 0 6px}
-.step p{margin:0;font-size:14.5px;color:var(--muted)}
-
 /* =========================== APP =========================== */
-.app{max-width:1400px;margin:0 auto;padding:0 clamp(12px,3vw,32px) 40px}
+.app{max-width:1400px;margin:0 auto;padding:0 clamp(12px,3vw,32px) 44px}
 .toolbar{display:flex;flex-wrap:wrap;align-items:end;gap:14px;background:var(--paper);
-  border:1px solid var(--line);border-radius:var(--radius) var(--radius) 0 0;padding:16px 18px;box-shadow:var(--shadow);position:relative;z-index:500}
+  border:2px solid var(--ink);border-radius:var(--radius) var(--radius) 0 0;padding:16px 18px;position:relative;z-index:500}
 .routeinfo{font-size:13.5px;color:var(--muted);align-self:center;margin-right:auto}
 .routeinfo b{color:var(--ink)}
 .field{display:flex;flex-direction:column;gap:4px}
-.field label{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.field input{font:inherit;font-size:15px;padding:9px 10px;border:2px solid var(--ink);border-radius:8px;background:#fff}
-.field input:focus-visible{outline:3px solid var(--route);outline-offset:2px}
+.field label{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.field input{font:inherit;font-size:15px;padding:9px 10px;border:2px solid var(--ink);border-radius:10px;background:#fff}
 #range{width:92px}
 .status{font-size:13.5px;color:var(--muted);align-self:center;min-width:170px}
-.bar{height:5px;background:var(--line)}
-.bar i{display:block;height:100%;width:0;background:repeating-linear-gradient(-45deg,var(--orange) 0 10px,var(--orange-deep) 10px 20px);transition:width .3s}
+.bar{height:8px;background:var(--soft);border-inline:2px solid var(--ink)}
+.bar i{display:block;height:100%;width:0;transition:width .3s;
+  background:repeating-linear-gradient(-45deg,var(--orange) 0 12px,var(--ink) 12px 24px)}
 
 .workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,1fr);min-height:560px;
-  border:1px solid var(--line);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+  border:2px solid var(--ink);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;box-shadow:var(--shadow)}
 .map{min-height:420px}
-.map.dropping{outline:4px dashed var(--orange);outline-offset:-4px}
-.results{overflow:auto;max-height:78vh;border-left:1px solid var(--line);background:var(--panel);padding:16px}
-.results h2{font-family:var(--font-display);font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:16px 0 10px}
+.map.dropping{outline:5px dashed var(--orange);outline-offset:-5px}
+.results{overflow:auto;max-height:78vh;border-left:2px solid var(--ink);background:var(--chalk);padding:16px}
+.results h2{font-weight:800;font-stretch:112%;font-size:15px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink);margin:16px 0 12px}
 
-/* result cards */
-.card{background:#fff;border:1px solid var(--line);border-left:6px solid var(--orange-deep);border-radius:var(--radius);
-  padding:12px 14px;margin-bottom:12px;cursor:pointer;display:flex;gap:14px;transition:border-color .15s,transform .12s}
-.card:hover{border-color:var(--ink);transform:translateY(-1px)}
-.km{flex:0 0 auto;width:62px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;text-align:center;align-self:flex-start;background:#fff}
-.km b{display:block;background:var(--orange-deep);color:#fff;font-size:10px;letter-spacing:.14em;padding:2px 0;font-family:var(--font-display)}
-.km span{display:block;font-family:var(--font-display);font-weight:800;font-size:20px;font-variant-numeric:tabular-nums;padding:2px 0 4px}
+/* resultaatkaarten */
+.card{background:var(--paper);border:2px solid var(--ink);border-left:8px solid var(--orange-deep);border-radius:12px;
+  padding:12px 14px;margin-bottom:14px;cursor:pointer;display:flex;gap:14px;box-shadow:var(--shadow-sm);
+  transition:transform .12s,box-shadow .12s}
+.card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.km{flex:0 0 auto;width:62px;border:2px solid var(--ink);border-radius:10px;overflow:hidden;text-align:center;align-self:flex-start;background:#fff}
+.km b{display:block;background:var(--ink);color:var(--yellow);font-size:10px;letter-spacing:.16em;padding:2px 0;font-weight:800}
+.km span{display:block;font-weight:900;font-stretch:115%;font-size:20px;font-variant-numeric:tabular-nums;padding:2px 0 4px}
 .body{min-width:0}
 .body h3{margin:0 0 3px;font-size:15px;font-weight:700;line-height:1.3}
 .meta{font-size:12.5px;color:var(--muted);line-height:1.55}
 .meta b{color:var(--ink);font-weight:600}
-.chip{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;margin-top:6px;background:var(--orange-bg);color:var(--orange-deep)}
+.chip{display:inline-block;font-size:11px;font-weight:800;padding:2px 10px;border-radius:99px;margin-top:6px;
+  background:var(--orange-bg);color:var(--orange-deep);border:1.5px solid var(--orange-deep)}
 .cons{font-size:12.5px;margin-top:6px}
-.cons em{font-style:normal;background:var(--orange-bg);border-radius:4px;padding:0 4px;font-weight:600}
+.cons em{font-style:normal;background:var(--yellow);border-radius:4px;padding:0 4px;font-weight:700}
 
-.empty{border:2px dashed var(--line);border-radius:var(--radius);padding:28px 22px;text-align:center;color:var(--muted);font-size:14.5px}
+.empty{border:2px dashed var(--ink);border-radius:var(--radius);padding:28px 22px;text-align:center;color:var(--muted);font-size:14.5px;background:var(--paper)}
 .empty-icon{font-size:34px;display:block;margin-bottom:8px}
 .empty strong{color:var(--ok)}
-.error{display:none;background:#FDEBEB;border:1px solid #E4B4B4;color:#8A2626;border-radius:var(--radius);padding:12px 14px;font-size:13.5px;line-height:1.5;margin-bottom:12px}
+.error{display:none;background:#FDEBEB;border:2px solid #8A2626;color:#8A2626;border-radius:var(--radius);padding:12px 14px;font-size:13.5px;line-height:1.5;margin-bottom:12px}
 .note{font-size:12.5px;color:var(--muted)}
 
 /* =========================== FOOTER =========================== */
-.footer{background:var(--asphalt);color:#A7ADB6;margin-top:20px}
+.footer{background:var(--ink);color:#A7ADB6;margin-top:24px}
 .footer-inner{max-width:1200px;margin:0 auto;padding:18px clamp(20px,5vw,56px);display:flex;flex-wrap:wrap;gap:8px 28px;font-size:13px}
 .footer b{color:#fff}
 .footer a{color:#D8DBDF}
 
 /* =========================== RESPONSIVE =========================== */
-@media(max-width:960px){
-  .hero-inner{grid-template-columns:1fr}
-  .hero-art{max-width:420px;margin:0 auto}
-  .steps-grid{grid-template-columns:1fr}
-  .workspace{grid-template-columns:1fr;grid-template-rows:48vh minmax(0,1fr)}
-  .results{border-left:none;border-top:1px solid var(--line);max-height:none}
+@media(max-width:1020px){
+  .cell-step{grid-column:span 3}
+  .cell-stat,.cell-live{grid-column:span 3}
 }
+@media(max-width:680px){
+  .bento{grid-template-columns:1fr}
+  .cell-step,.cell-stat,.cell-live{grid-column:span 1}
+  .mega-line:nth-child(2){margin-left:8vw}
+  .workspace{grid-template-columns:1fr;grid-template-rows:48vh minmax(0,1fr)}
+  .results{border-left:none;border-top:2px solid var(--ink);max-height:none}
+  .navlink:not(.navlink-cta){display:none}
+}
+/* =========================== TOEGANKELIJKHEID =========================== */
 @media(prefers-reduced-motion:reduce){
-  .art-werf{animation:none}
-  .bar i,.btn,.card{transition:none}
   html{scroll-behavior:auto}
+  .mega-line{animation:none}
+  .marquee-track{animation:none;flex-wrap:wrap}
+  .pulse::after{animation:none}
+  .reveal{animation:none!important}
+  .btn,.card,.cell,.navlink-cta,.bar i{transition:none}
 }

@@ -196,7 +196,7 @@
     }
 
     lastReport =
-      `Hindercheck ${route.name} (${route.km.toFixed(1)} km) — ritdatum ${dateStr}\n` +
+      `WerfAlarm — hindercheck ${route.name} (${route.km.toFixed(1)} km) — ritdatum ${dateStr}\n` +
       `Bron: GIPOD open data (geo.api.vlaanderen.be), zoekafstand ${range === 0 ? "0 m (enkel op de route zelf)" : "±" + range + " m"}\n\n` +
       `ACTIEF OP RITDATUM (${active.length}):\n` +
       active.map(r => `- km ${r.km.toFixed(1)} | ${r.desc} | ${GIPOD.fmtDate(r.start)}→${GIPOD.fmtDate(r.end)} | ${r.cons || "gevolgen onbekend"} | ${r.dist} m van track | ${r.lat.toFixed(5)},${r.lon.toFixed(5)}`).join("\n");
