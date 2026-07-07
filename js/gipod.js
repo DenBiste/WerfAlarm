@@ -69,7 +69,8 @@ const GIPOD = (() => {
 
   const fmtDate = s => {
     if (!s) return "?";
-    return new Date(s).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
+    const loc = (typeof I18N !== "undefined" && I18N.ui) ? I18N.ui().locale : "nl-BE";
+    return new Date(s).toLocaleDateString(loc, { day: "numeric", month: "short", year: "numeric" });
   };
 
   return { query, summarize, fmtDate, clearCache };

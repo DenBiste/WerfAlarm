@@ -3,19 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gids — WerfAlarm</title>
-<meta name="description" content="Zo werkt WerfAlarm: bekijk de korte instructievideo en volg de stap-voor-stapgids met schermafbeeldingen.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚧</text></svg>">
+<title>Gids — Route Info</title>
+<meta name="description" content="Zo werkt Route Info: video, stap-voor-stapgids en veelgestelde vragen — in het Nederlands of Engels.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/style.css?v=23">
 <style>
-  /* pagina-specifiek voor de gids */
   .gids{max-width:1000px;margin:0 auto;padding:clamp(28px,4vw,56px) clamp(16px,4vw,44px)}
   .gids .mega{font-size:clamp(44px,8vw,110px)}
   .gids-intro{font-size:clamp(15px,1.5vw,18px);max-width:62ch;margin:18px 0 34px}
-  .video-frame{border:2px solid var(--ink);border-radius:var(--radius);overflow:hidden;
-    box-shadow:var(--shadow);background:var(--ink)}
+  .video-frame{border:2px solid var(--ink);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);background:var(--ink)}
   .video-frame video{display:block;width:100%;height:auto}
   .video-caption{font-size:13px;color:var(--muted);margin:12px 2px 0}
   .gstep{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:26px;align-items:start;
@@ -24,187 +22,135 @@
   .gstep:nth-of-type(even) .gtext{order:2}
   .gtext h2{font-weight:900;font-stretch:116%;text-transform:uppercase;font-size:clamp(22px,2.6vw,30px);margin:10px 0 10px}
   .gtext p{margin:0 0 12px;font-size:15px}
-  .gtext ul{margin:0 0 12px;padding-left:20px;font-size:15px}
-  .gtext li{margin-bottom:6px}
-  .gtext .tip{background:var(--paper);border:2px solid var(--ink);border-radius:12px;
-    box-shadow:var(--shadow-sm);padding:12px 14px;font-size:14px;margin-top:14px}
+  .gtext .tip{background:var(--paper);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--shadow-sm);padding:12px 14px;font-size:14px;margin-top:14px}
   .gtext .tip b{color:var(--orange-deep)}
-  .shot{border:2px solid var(--ink);border-radius:var(--radius);box-shadow:var(--shadow);
-    overflow:hidden;background:#fff}
+  .shot{border:2px solid var(--ink);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;background:#fff}
   .shot img{display:block;width:100%;height:auto}
   .shot figcaption{font-size:12.5px;color:var(--muted);padding:8px 12px;border-top:2px solid var(--ink);background:var(--paper)}
   .shot + .shot{margin-top:18px}
-  kbd,.ui{font:inherit;font-weight:700;font-size:.9em;background:var(--paper);border:1.5px solid var(--ink);
-    border-radius:6px;padding:0 6px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}
+  kbd,.ui{font:inherit;font-weight:700;font-size:.9em;background:var(--paper);border:1.5px solid var(--ink);border-radius:6px;padding:0 6px;box-shadow:2px 2px 0 var(--ink);white-space:nowrap}
   .faq{margin-top:clamp(40px,5vw,60px);padding-top:clamp(24px,3vw,36px);border-top:2px solid var(--ink)}
   .faq h2{font-weight:900;font-stretch:116%;text-transform:uppercase;font-size:clamp(22px,2.6vw,30px)}
-  .faq details{background:var(--paper);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--shadow-sm);
-    padding:14px 18px;margin-bottom:12px}
+  .faq details{background:var(--paper);border:2px solid var(--ink);border-radius:12px;box-shadow:var(--shadow-sm);padding:14px 18px;margin-bottom:12px}
   .faq summary{font-weight:800;cursor:pointer;font-size:15px}
   .faq p{font-size:14.5px;margin:10px 0 0}
   .backcta{margin-top:clamp(36px,5vw,56px);text-align:center}
-  @media(max-width:760px){.gstep,.gstep:nth-of-type(even){grid-template-columns:1fr}
-    .gstep:nth-of-type(even) .gtext{order:0}}
+  @media(max-width:760px){.gstep,.gstep:nth-of-type(even){grid-template-columns:1fr}.gstep:nth-of-type(even) .gtext{order:0}}
 </style>
 </head>
 <body>
 
 <nav class="topbar">
-  <span class="brand"><span class="brand-stripe"></span>WERF<em>ALARM</em></span>
-  <a class="navlink" href="index.html#hoe">Start</a>
-  <a class="navlink" href="gids.html" aria-current="page"><b>Gids</b></a>
-  <a class="navlink navlink-cta" href="index.html#app">Naar de check ↓</a>
+  <span class="brand"><span class="brand-stripe"></span>ROUTE<em>&nbsp;INFO</em></span>
+  <a class="navlink" href="index.html#hoe" data-i18n="navStart">Start</a>
+  <a class="navlink" href="gids.html" aria-current="page"><b data-i18n="navGids">Gids</b></a>
+  <div class="seg lang" role="group" aria-label="Taal / Language">
+    <button type="button" class="seg-btn lang-btn" data-lang="nl" aria-pressed="true">NL</button>
+    <button type="button" class="seg-btn lang-btn" data-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <a class="navlink navlink-cta" href="index.html#app" data-i18n="navCheck">Naar de check ↓</a>
 </nav>
 
 <main class="gids">
-  <h1 class="mega"><span class="mega-line">DE <span class="hl">GIDS</span><span class="dot">.</span></span></h1>
-  <p class="gids-intro">In een halve minuut zie je hieronder de volledige werkwijze. Daaronder vind je
-  elke stap in detail, met schermafbeeldingen en tips om het meeste uit je hindercheck te halen.</p>
+  <h1 class="mega"><span class="mega-line"><span data-i18n="g_title">DE </span><span class="hl" data-i18n="g_titleHl">GIDS</span><span class="dot">.</span></span></h1>
+  <p class="gids-intro" data-i18n-html="g_intro"></p>
 
-  <!-- ======================= INSTRUCTIEVIDEO ======================= -->
   <div class="video-frame">
     <video controls preload="metadata" poster="assets/gids-poster.png" playsinline>
       <source src="assets/gids.mp4" type="video/mp4">
-      Je browser kan deze video niet afspelen. <a href="assets/gids.mp4">Download de video</a>.
+      <a href="assets/gids.mp4">gids.mp4</a>
     </video>
   </div>
-  <p class="video-caption">Instructievideo (33 s, zonder geluid — alle uitleg staat in beeld). De beelden zijn een
-  weergave van de app; kleuren en indeling komen overeen met wat je op je eigen scherm ziet.</p>
+  <p class="video-caption" data-i18n-html="g_videoCap"></p>
 
-  <!-- ======================= STAP 1 ======================= -->
   <section class="gstep">
     <div class="gtext">
-      <span class="step-nr">STAP 01</span>
-      <h2>Laad je route</h2>
-      <p>Klik op <span class="ui">Laad GPX…</span> links in de werkbalk en kies je routebestand,
-      of sleep het GPX-bestand gewoon op de kaart. WerfAlarm leest tracks van
-      Komoot, Strava, Garmin, RideWithGPS en elke andere app of fietscomputer die GPX exporteert.</p>
-      <p>Zodra de route is ingeladen zie je het blauwe spoor op de kaart verschijnen, met een groene stip
-      op het startpunt. In de werkbalk lees je de naam van je route, de totale afstand en in hoeveel
-      zones we ze opdelen om de databank efficiënt te bevragen.</p>
-      <div class="tip"><b>Tip:</b> ook heel lange tochten (200&nbsp;km en meer) kunnen. WerfAlarm vereenvoudigt
-      je track automatisch zodat de controle vlot blijft, zonder aan nauwkeurigheid in te boeten.</div>
+      <span class="step-nr" data-i18n="g_s1nr">STAP 01</span>
+      <h2 data-i18n="g_s1t"></h2>
+      <div data-i18n-html="g_s1p"></div>
     </div>
     <div>
-      <figure class="shot"><img src="assets/img/stap1-laden.png" alt="De werkbalk met de knop Laad GPX oranje omlijnd en de muisaanwijzer erop">
-        <figcaption>Klik op “Laad GPX…” of sleep je bestand op de kaart.</figcaption></figure>
-      <figure class="shot"><img src="assets/img/stap1-geladen.png" alt="De kaart met het blauwe routespoor en in de werkbalk de routenaam met afstand">
-        <figcaption>Route geladen: het blauwe spoor verschijnt, met naam en afstand in de werkbalk.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap1-laden.png" alt="">
+        <figcaption data-i18n="g_s1c1"></figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap1-geladen.png" alt="">
+        <figcaption data-i18n="g_s1c2"></figcaption></figure>
     </div>
   </section>
 
-  <!-- ======================= STAP 2 ======================= -->
   <section class="gstep">
     <div class="gtext">
-      <span class="step-nr">STAP 02</span>
-      <h2>Kies datum &amp; zoekafstand</h2>
-      <p>Stel bij <span class="ui">Ritdatum</span> in wanneer je rijdt. WerfAlarm toont daarna énkel
-      hinder die op die dag actief is — werken die eerder aflopen of pas later starten, worden weggelaten.
-      De databank kijkt tot ongeveer zes maanden vooruit, dus ook je toertocht van volgende maand kan je nu al checken.</p>
-      <p>Met <span class="ui">Zoekafstand (m)</span> bepaal je hoe ver naast je track we kijken:</p>
-      <ul>
-        <li><b>0&nbsp;m</b> — de strengste stand: enkel werven die je track zélf raakt of kruist.</li>
-        <li><b>20–50&nbsp;m</b> — aanrader voor de racefiets: ook werken vlak naast de rijbaan tellen mee.</li>
-        <li><b>100–250&nbsp;m</b> — ruime blik, handig als je onderweg wil kunnen uitwijken naar parallelwegen.</li>
-      </ul>
-      <div class="tip"><b>Waarom niet gewoon altijd 0?</b> Werfzones worden door aannemers ingetekend en liggen
-      niet altijd exact op de rijbaan — soms enkel op het voetpad of één rijstrook ernaast, terwijl de signalisatie
-      wél op de weg staat. Een kleine marge vangt dat op.</div>
+      <span class="step-nr" data-i18n="g_s2nr">STAP 02</span>
+      <h2 data-i18n="g_s2t"></h2>
+      <div data-i18n-html="g_s2p"></div>
     </div>
     <div>
-      <figure class="shot"><img src="assets/img/stap2-instellingen.png" alt="De velden Ritdatum en Zoekafstand oranje omlijnd, zoekafstand staat op 50 meter">
-        <figcaption>Ritdatum en zoekafstand: hier op 50 m — enkel hinder actief op die dag telt.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap2-instellingen.png" alt="">
+        <figcaption data-i18n="g_s2c1"></figcaption></figure>
     </div>
   </section>
 
-  <!-- ======================= STAP 3 ======================= -->
   <section class="gstep">
     <div class="gtext">
-      <span class="step-nr">STAP 03</span>
-      <h2>Controleer je route</h2>
-      <p>Klik op <span class="ui">Controleer route</span>. WerfAlarm bevraagt nu rechtstreeks de open
-      GIPOD-databank van de Vlaamse overheid — dezelfde bron als <i>Hinder in kaart</i> op geopunt.be —
-      voor élke zone langs je track. De gestreepte balk toont de voortgang; bij een route van ±120&nbsp;km
-      duurt dit doorgaans maar enkele seconden.</p>
-      <p>Er wordt gezocht in twee lagen tegelijk: de <b>gevalideerde hinder</b> (met gevolgen zoals
-      “weg afgesloten”) én de <b>innames</b> (geplande werken). Dubbels over dezelfde werf voegen we
-      automatisch samen.</p>
+      <span class="step-nr" data-i18n="g_s3nr">STAP 03</span>
+      <h2 data-i18n="g_s3t"></h2>
+      <div data-i18n-html="g_s3p"></div>
     </div>
     <div>
-      <figure class="shot"><img src="assets/img/stap3-bevraging.png" alt="De voortgangsbalk half gevuld met oranje strepen en de status Bevraagt GIPOD 21 van 34">
-        <figcaption>De bevraging loopt: de status toont hoeveel zones al gecontroleerd zijn.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap3-bevraging.png" alt="">
+        <figcaption data-i18n="g_s3c1"></figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap4-resultaat.png" alt="">
+        <figcaption data-i18n="g_s3c2"></figcaption></figure>
     </div>
   </section>
 
-  <!-- ======================= STAP 4 ======================= -->
   <section class="gstep">
     <div class="gtext">
-      <span class="step-nr">STAP 04</span>
-      <h2>Lees het resultaat</h2>
-      <p>Elke gevonden werf verschijnt als kaartje in de rechterkolom, gesorteerd op kilometerpunt, en als
-      oranje wegvak op de kaart — precies de wegen die getroffen zijn, zoals op Hinder in kaart. Op elk kaartje lees je:</p>
-      <ul>
-        <li><b>KM-badge</b> — op welk punt van jóuw route de werf ligt (handig voor je bidonplanning);</li>
-        <li><b>omschrijving en periode</b> — wat er gebeurt en van wanneer tot wanneer;</li>
-        <li><b>afstand tot je track</b> — 0 m betekent: je rijdt er dwars doorheen;</li>
-        <li><b>gevolgen</b> — ingrepen zoals <i>weg afgesloten</i> of <i>fietsers omleiding</i> worden geel gemarkeerd:
-        dáár moet je mogelijk hertekenen.</li>
-      </ul>
-      <p>Klik op een kaartje en de kaart zoomt naar het getroffen wegvak, met een pop-up met alle details.
-      Met <span class="ui">Rapport ⬇</span> download je een deelbaar overzicht met kaartje en alle details —
-      handig voor de clubchat — en met <span class="ui">GPX + werven ⬇</span> krijg je je route terug mét een
-      waarschuwingspunt op elke werf, zichtbaar op je Garmin of Wahoo.</p>
-      <div class="tip"><b>Vrije baan?</b> Vind je niets, dan zie je “Vrije baan! 🎉” — geen enkele werf
-      binnen je zoekafstand op je ritdatum. Goede rit!</div>
+      <span class="step-nr" data-i18n="g_s4nr">STAP 04</span>
+      <h2 data-i18n="g_s4t"></h2>
+      <div data-i18n-html="g_s4p"></div>
     </div>
     <div>
-      <figure class="shot"><img src="assets/img/stap4-resultaat.png" alt="Twee resultaatkaartjes in de rechterkolom en twee oranje werfzones op het routespoor">
-        <figcaption>Twee werven gevonden: oranje wegvakken op de kaart, details in de kaartjes.</figcaption></figure>
-      <figure class="shot"><img src="assets/img/stap4-detail.png" alt="Ingezoomde kaart met pop-up met kilometerpunt, periode en gevolgen van de werf">
-        <figcaption>Klik op een kaartje: inzoomen op het wegvak, met pop-up en alle details.</figcaption></figure>
+      <figure class="shot"><img src="assets/img/stap4-detail.png" alt="">
+        <figcaption data-i18n="g_s4c1"></figcaption></figure>
     </div>
   </section>
 
-  <!-- ======================= FAQ ======================= -->
   <section class="faq">
-    <h2>Goed om te weten</h2>
+    <h2 data-i18n="g_faqT">Goed om te weten</h2>
     <details>
-      <summary>Hoe betrouwbaar en actueel is de data?</summary>
-      <p>WerfAlarm bevraagt live de open GIPOD-databank — het officiële register waarin steden, gemeenten en
-      nutsbedrijven innames van de openbare weg in Vlaanderen registreren. Je ziet dus exact dezelfde informatie
-      als op geopunt.be/hinder-in-kaart, op het moment dat jij controleert. Kleine, niet-geregistreerde of
-      last-minute werken kunnen ontbreken; de databank kijkt tot ±6 maanden vooruit.</p>
+      <summary data-i18n="g_q1"></summary><p data-i18n-html="g_a1"></p>
     </details>
     <details>
-      <summary>Werkt dit ook buiten Vlaanderen?</summary>
-      <p>Nee — GIPOD dekt enkel Vlaanderen. Stukken route door Brussel of Wallonië komen leeg terug:
-      dat betekent “geen data”, niet “geen wegenwerken”.</p>
+      <summary data-i18n="g_q2"></summary><p data-i18n-html="g_a2"></p>
     </details>
     <details>
-      <summary>Waarom zie ik soms een zone die breder lijkt dan de straat?</summary>
-      <p>De vorm komt rechtstreeks van de aannemer of gemeente die de werf intekende. Meestal is dat netjes
-      langs de weg, maar soms is het een ruwe cirkel of rechthoek rond de werfzone. Bekijk in dat geval de
-      pop-up: de omschrijving en gevolgen vertellen je wat er écht aan de hand is.</p>
+      <summary data-i18n="g_q3"></summary><p data-i18n-html="g_a3"></p>
     </details>
     <details>
-      <summary>Wordt mijn route ergens opgeslagen?</summary>
-      <p>Nee. Je GPX wordt volledig in je eigen browser verwerkt; enkel de kaartuitsnedes (zones) worden als
-      zoekvraag naar de open databank gestuurd. Er is geen account en er wordt niets bewaard.</p>
+      <summary data-i18n="g_q4"></summary><p data-i18n-html="g_a4"></p>
+    </details>
+    <details>
+      <summary data-i18n="g_q5"></summary><p data-i18n-html="g_a5"></p>
+    </details>
+    <details>
+      <summary data-i18n="g_q6"></summary><p data-i18n-html="g_a6"></p>
     </details>
   </section>
 
   <div class="backcta">
-    <a class="btn btn-primary btn-big" href="index.html#app">Zelf proberen <span class="arrow">→</span></a>
+    <a class="btn btn-primary btn-big" href="index.html#app"><span data-i18n="g_cta">Zelf proberen</span> <span class="arrow">→</span></a>
   </div>
 </main>
 
 <footer class="footer">
   <div class="barrier thin" aria-hidden="true"></div>
   <div class="footer-inner">
-    <span><b>WerfAlarm</b> · hindercheck voor fietsroutes</span>
-    <span>Bron: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (geo.api.vlaanderen.be) — innames &amp; gevalideerde hinder, vandaag tot +6 maanden, enkel Vlaanderen. Kaart © OpenStreetMap.</span>
+    <span><b>Route Info</b> · <span data-i18n="footTag">route-briefing voor fietsers</span></span>
+    <span data-i18n-html="footSrc"></span>
   </div>
 </footer>
 
+<script src="js/i18n.js?v=23"></script>
+<script src="js/gids-i18n.js?v=23"></script>
 </body>
 </html>

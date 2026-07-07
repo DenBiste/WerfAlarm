@@ -3,37 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WerfAlarm — check je fietsroute op wegenwerken</title>
-<meta name="description" content="WerfAlarm — laad je GPX en zie meteen elke werf, afsluiting en hinder op je fietsroute. Live GIPOD-data van Hinder in kaart, voor heel Vlaanderen.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚧</text></svg>">
+<title>Route Info — werven, klimmen & weer op je fietsroute</title>
+<meta name="description" content="Route Info — laad je GPX en zie elke werf, elke klim en het weer op je fietsroute. Live GIPOD- en Open-Meteo-data, in het Nederlands of Engels.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/style.css?v=22">
+<link rel="stylesheet" href="css/style.css?v=23">
 </head>
 <body>
 
 <!-- ======================= TOPBAR ======================= -->
 <nav class="topbar">
-  <span class="brand"><span class="brand-stripe"></span>WERF<em>ALARM</em></span>
-  <a class="navlink" href="#hoe">Start</a>
-  <a class="navlink" href="gids.html">Gids</a>
-  <a class="navlink navlink-cta" href="#app">Naar de check ↓</a>
+  <span class="brand"><span class="brand-stripe"></span>ROUTE<em>&nbsp;INFO</em></span>
+  <a class="navlink" href="#hoe" data-i18n="navStart">Start</a>
+  <a class="navlink" href="gids.html" data-i18n="navGids">Gids</a>
+  <div class="seg lang" role="group" aria-label="Taal / Language">
+    <button type="button" class="seg-btn lang-btn" data-lang="nl" aria-pressed="true">NL</button>
+    <button type="button" class="seg-btn lang-btn" data-lang="en" aria-pressed="false">EN</button>
+  </div>
+  <a class="navlink navlink-cta" href="#app" data-i18n="navCheck">Naar de check ↓</a>
 </nav>
 
 <!-- ======================= HERO ======================= -->
 <header class="hero">
-  <h1 class="mega" aria-label="Vrije baan en gaan.">
-    <span class="mega-line">VRIJE <span class="hl">BAAN</span></span>
-    <span class="mega-line">EN GAAN<span class="dot">.</span></span>
+  <h1 class="mega">
+    <span class="mega-line"><span data-i18n="heroH1a">VRIJE </span><span class="hl" data-i18n="heroH1hl">BAAN</span></span>
+    <span class="mega-line"><span data-i18n="heroH1b">EN GAAN</span><span class="dot">.</span></span>
   </h1>
   <div class="hero-row">
-    <p class="lede">Laad je GPX en zie in enkele seconden élke wegenwerf, afsluiting en omleiding
-    op je route — met het exacte kilometerpunt. Live data uit <strong>GIPOD</strong>,
-    dezelfde bron als Hinder&nbsp;in&nbsp;kaart van de Vlaamse overheid.</p>
+    <p class="lede" data-i18n-html="heroLede"></p>
     <div class="hero-cta">
-      <button id="ctaLoad" class="btn btn-primary btn-big">Laad je GPX <span class="arrow">→</span></button>
-      <p class="hero-note">Komoot · Strava · Garmin · RideWithGPS<br>Gratis, zonder account</p>
+      <button id="ctaLoad" class="btn btn-primary btn-big"><span data-i18n="heroCta">Laad je GPX</span> <span class="arrow">→</span></button>
+      <p class="hero-note" data-i18n-html="heroNote"></p>
     </div>
   </div>
 </header>
@@ -41,42 +43,38 @@
 <!-- ======================= KINETIC MARQUEE ======================= -->
 <div class="marquee" aria-hidden="true">
   <div class="marquee-track">
-    <span>CHECK JE GPX&ensp;▸&ensp;ELKE WERF OP JE ROUTE&ensp;▸&ensp;LIVE GIPOD-DATA&ensp;▸&ensp;HEEL VLAANDEREN&ensp;▸&ensp;VRIJE BAAN&ensp;▸&ensp;</span>
-    <span>CHECK JE GPX&ensp;▸&ensp;ELKE WERF OP JE ROUTE&ensp;▸&ensp;LIVE GIPOD-DATA&ensp;▸&ensp;HEEL VLAANDEREN&ensp;▸&ensp;VRIJE BAAN&ensp;▸&ensp;</span>
+    <span data-i18n="marquee"></span>
+    <span data-i18n="marquee"></span>
   </div>
 </div>
 
 <!-- ======================= BENTO ======================= -->
 <section id="hoe" class="bento-wrap">
-  <h2 class="section-title">Van GPX naar gerust vertrekken</h2>
+  <h2 class="section-title" data-i18n="bentoTitle">Van GPX naar gerust vertrekken</h2>
   <div class="bento">
     <article class="cell cell-step reveal">
       <span class="step-nr">01</span>
-      <h3>Laad je route</h3>
-      <p>Sleep je GPX op de kaart of kies het via de knop. Tracks van elke app of fietscomputer werken meteen.</p>
+      <h3 data-i18n="s1t"></h3><p data-i18n="s1p"></p>
     </article>
     <article class="cell cell-step reveal">
       <span class="step-nr">02</span>
-      <h3>Kies datum &amp; marge</h3>
-      <p>Wanneer rij je, en hoe ver naast je track wil je kijken? Op <b>0&nbsp;m</b> zie je enkel hinder die je track zélf kruist.</p>
+      <h3 data-i18n="s2t"></h3><p data-i18n="s2p"></p>
     </article>
     <article class="cell cell-step reveal">
       <span class="step-nr">03</span>
-      <h3>Zie elke werf</h3>
-      <p>De getroffen wegvakken lichten op langs je route, met km-punt, periode en gevolgen. Herteken, of vertrek gerust.</p>
+      <h3 data-i18n="s3t"></h3><p data-i18n="s3p"></p>
     </article>
     <article class="cell cell-stat cell-orange reveal">
-      <span class="stat">±6<small>mnd</small></span>
-      <p>vooruitgeplande hinder in de databank — check ook je toertocht van volgende maand</p>
+      <span class="stat"><span data-i18n="f1n">±6</span><small data-i18n="f1u">mnd</small></span>
+      <p data-i18n="f1p"></p>
     </article>
     <article class="cell cell-stat reveal">
-      <span class="stat">0<small>m</small></span>
-      <p>strengste zoekstand: enkel werven die je track écht kruist</p>
+      <span class="stat"><span data-i18n="f2n">3</span><small data-i18n="f2u">lagen</small></span>
+      <p data-i18n="f2p"></p>
     </article>
     <article class="cell cell-live reveal">
       <span class="pulse" aria-hidden="true"></span>
-      <h3>Live overheidsdata</h3>
-      <p>Rechtstreeks uit GIPOD, het officiële register van innames &amp; hinder op de openbare weg in Vlaanderen. Geen kopie, geen vertraging.</p>
+      <h3 data-i18n="liveT"></h3><p data-i18n="liveP"></p>
     </article>
   </div>
 </section>
@@ -84,42 +82,44 @@
 <!-- ======================= APP ======================= -->
 <main id="app" class="app">
   <div class="toolbar">
-    <label class="btn btn-primary filebtn">Laad GPX…<input type="file" id="gpxfile" accept=".gpx,application/gpx+xml"></label>
-    <span id="routeinfo" class="routeinfo">Nog geen route geladen — of sleep een GPX op de kaart</span>
+    <label class="btn btn-primary filebtn"><span data-i18n="loadGpx">Laad GPX…</span><input type="file" id="gpxfile" accept=".gpx,application/gpx+xml"></label>
+    <span id="routeinfo" class="routeinfo" data-i18n="noRoute">Nog geen route geladen — of sleep een GPX op de kaart</span>
     <div class="field">
-      <label for="ridedate">Ritdatum</label>
+      <label for="ridedate" data-i18n="rideDate">Ritdatum</label>
       <input type="date" id="ridedate">
     </div>
     <div class="field">
-      <label for="range" title="Hoe ver naast je track gezocht wordt. 0 = enkel hinder die je track zelf raakt of kruist.">Zoekafstand (m)</label>
+      <label for="range" data-i18n="searchDist" data-i18n-title="distTitle">Zoekafstand (m)</label>
       <input type="number" id="range" min="0" max="250" step="10" value="100">
     </div>
     <div class="field">
-      <label id="modelabel" title="Voor welke weggebruikers wil je hinder zien? Combineer vrij; gevolgen die enkel voor niet-gekozen groepen gelden worden weggelaten. Algemene afsluitingen gelden voor iedereen.">Weggebruiker(s)</label>
+      <label id="modelabel" data-i18n="usersLbl" data-i18n-title="usersTitle">Weggebruiker(s)</label>
       <div class="seg" id="mode" role="group" aria-labelledby="modelabel">
-        <button type="button" class="seg-btn" data-m="bike" aria-pressed="true">🚴 Fietsers</button>
-        <button type="button" class="seg-btn" data-m="ped" aria-pressed="true">🚶 Voetgangers</button>
-        <button type="button" class="seg-btn" data-m="motor" aria-pressed="true">🚗 Gemotoriseerd</button>
-        <button type="button" class="seg-btn" data-m="all" aria-pressed="true" title="Selecteer alle weggebruikers">Alles</button>
+        <button type="button" class="seg-btn" data-m="bike" aria-pressed="true" data-i18n="mBike">🚴 Fietsers</button>
+        <button type="button" class="seg-btn" data-m="ped" aria-pressed="true" data-i18n="mPed">🚶 Voetgangers</button>
+        <button type="button" class="seg-btn" data-m="motor" aria-pressed="true" data-i18n="mMotor">🚗 Gemotoriseerd</button>
+        <button type="button" class="seg-btn" data-m="all" aria-pressed="true" data-i18n="mAll">Alles</button>
       </div>
     </div>
     <div class="field">
-      <label for="onlyhard" title="Berekent en toont enkel blokkades: afsluitingen, geen doorgang, omleidingen en fietshinder. Lichtere hinder wordt overgeslagen.">Filter</label>
-      <label class="checkline"><input type="checkbox" id="onlyhard"> ⛔ Enkel blokkades</label>
+      <label for="onlyhard" data-i18n="filterLbl" data-i18n-title="onlyHardTitle">Filter</label>
+      <label class="checkline"><input type="checkbox" id="onlyhard"> <span data-i18n="onlyHard">⛔ Enkel blokkades</span></label>
     </div>
-    <div class="field">
-      <label for="replang" title="Taal van het PDF-rapport / Language of the PDF report">Rapporttaal</label>
-      <select id="replang">
-        <option value="nl">Nederlands</option>
-        <option value="en">English</option>
-      </select>
-    </div>
-    <button id="run" class="btn btn-dark" disabled>Controleer route</button>
-    <button id="dlgpx" class="btn btn-ghost" disabled title="Download je GPX met een waarschuwings-waypoint op elke werf — zichtbaar op je Garmin of Wahoo">GPX + werven ⬇</button>
-    <button id="report" class="btn btn-ghost" disabled title="Download een PDF-rapport met kaartje en alle details — makkelijk te delen (lukt de PDF niet, dan krijg je automatisch een HTML-versie)">Rapport (PDF) ⬇</button>
-    <span id="status" class="status" role="status">Laad eerst een GPX-bestand.</span>
+    <button id="run" class="btn btn-dark" disabled data-i18n="run">Controleer route</button>
+    <button id="dlgpx" class="btn btn-ghost" disabled data-i18n="dlgpx" data-i18n-title="dlgpxTitle">GPX + werven ⬇</button>
+    <button id="report" class="btn btn-ghost" disabled data-i18n="report" data-i18n-title="reportTitle">Rapport (PDF) ⬇</button>
+    <span id="status" class="status" role="status" data-i18n="statusLoadFirst">Laad eerst een GPX-bestand.</span>
   </div>
   <div id="bar" class="bar"><i></i></div>
+
+  <!-- kaartlagen: onafhankelijk combineerbaar -->
+  <div class="layers">
+    <span class="layers-lbl" data-i18n="layersLbl">Kaartlagen — combineer vrij:</span>
+    <button type="button" class="seg-btn layer-btn" data-layer="blocks" aria-pressed="true" data-i18n="layBlocks">🚧 Blokkades &amp; hinder</button>
+    <button type="button" class="seg-btn layer-btn" data-layer="profile" aria-pressed="true" data-i18n="layProfile">⛰️ Hoogteprofiel</button>
+    <button type="button" class="seg-btn layer-btn" data-layer="weather" aria-pressed="true" data-i18n="layWeather">🌤️ Weer &amp; wind</button>
+  </div>
+
   <div id="strip" class="strip" hidden></div>
 
   <div class="workspace">
@@ -129,30 +129,52 @@
       <div id="out">
         <div id="empty" class="empty">
           <span class="empty-icon">🚴</span>
-          Laad een GPX-bestand en klik op <b>Controleer route</b>.<br>
-          We bevragen de open GIPOD-databank langs jouw track en tonen enkel hinder
-          die actief is op je ritdatum, binnen de gekozen zoekafstand
-          (0&nbsp;m&nbsp;= enkel op de route zelf).
+          <span data-i18n-html="emptyStart"></span>
         </div>
       </div>
     </aside>
   </div>
+
+  <!-- ======================= HOOFDSTUK: HOOGTEPROFIEL ======================= -->
+  <section id="secProfile" class="chapter" hidden>
+    <div class="chap-banner">
+      <span class="chap-icon" aria-hidden="true">⛰️</span>
+      <h2 data-i18n="chapProfile">HOOGTEPROFIEL &amp; KLIMMEN</h2>
+    </div>
+    <div class="chap-stripe" aria-hidden="true"></div>
+    <div class="chap-body">
+      <div class="profchart-box"><canvas id="profChart" width="1400" height="340"></canvas></div>
+      <p id="profStats" class="prof-stats"></p>
+      <div id="climbCards"></div>
+    </div>
+  </section>
+
+  <!-- ======================= HOOFDSTUK: WEER ======================= -->
+  <section id="secWeather" class="chapter" hidden>
+    <div class="chap-banner">
+      <span class="chap-icon" aria-hidden="true">🌤️</span>
+      <h2 data-i18n="chapWeather">WEERSVOORSPELLING</h2>
+    </div>
+    <div class="chap-stripe" aria-hidden="true"></div>
+    <div class="chap-body" id="weatherBody"></div>
+  </section>
 </main>
 
 <!-- ======================= FOOTER ======================= -->
 <footer class="footer">
   <div class="barrier thin" aria-hidden="true"></div>
   <div class="footer-inner">
-    <span><b>WerfAlarm</b> · hindercheck voor fietsroutes</span>
+    <span><b>Route Info</b> · <span data-i18n="footTag">route-briefing voor fietsers</span></span>
     <span id="footroute"></span>
-    <span>Bron: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (geo.api.vlaanderen.be) — innames &amp; gevalideerde hinder, vandaag tot +6 maanden, enkel Vlaanderen. Kaart © OpenStreetMap.</span>
+    <span data-i18n-html="footSrc"></span>
   </div>
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="js/geometry.js?v=22"></script>
-<script src="js/gpx.js?v=22"></script>
-<script src="js/gipod.js?v=22"></script>
-<script src="js/app.js?v=22"></script>
+<script src="js/i18n.js?v=23"></script>
+<script src="js/geometry.js?v=23"></script>
+<script src="js/gpx.js?v=23"></script>
+<script src="js/gipod.js?v=23"></script>
+<script src="js/app.js?v=23"></script>
 </body>
 </html>

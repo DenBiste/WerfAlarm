@@ -172,6 +172,52 @@ a{color:inherit}
 .seg-btn[aria-pressed="true"]{background:var(--ink);color:var(--yellow)}
 .seg-btn:hover:not([aria-pressed="true"]){background:var(--orange-bg)}
 
+/* taalkeuze in de topbar */
+.seg.lang{box-shadow:2px 2px 0 var(--ink)}
+.lang-btn{padding:5px 12px;font-size:12.5px}
+
+/* kaartlagen-balk: onafhankelijk combineerbare togglers */
+.layers{display:flex;flex-wrap:wrap;align-items:center;gap:10px;background:var(--paper);
+  border:2px solid var(--ink);border-top:none;padding:10px 18px}
+.layers-lbl{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.layer-btn{border:2px solid var(--ink);border-radius:99px;box-shadow:2px 2px 0 var(--ink)}
+
+/* hoofdstukken onder de kaart (spiegel van het PDF-rapport) */
+.chapter{margin-top:26px}
+.chap-banner{display:flex;align-items:center;gap:0;background:var(--ink);border:2px solid var(--ink);
+  border-radius:var(--radius) var(--radius) 0 0;overflow:hidden}
+.chap-icon{flex:0 0 auto;width:54px;height:54px;display:grid;place-items:center;font-size:26px;background:var(--orange)}
+.chap-banner h2{margin:0;padding:0 18px;font-weight:900;font-stretch:118%;font-size:clamp(20px,3vw,30px);
+  letter-spacing:.02em;color:#fff;text-transform:uppercase}
+.chap-stripe{height:10px;background:repeating-linear-gradient(-45deg,var(--orange) 0 14px,#fff 14px 28px);border-inline:2px solid var(--ink)}
+.chap-body{background:var(--paper);border:2px solid var(--ink);border-top:none;
+  border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow);padding:18px}
+.profchart-box{border:2px solid var(--ink);border-radius:10px;overflow:hidden;background:var(--chalk)}
+.profchart-box canvas{display:block;width:100%;height:auto}
+.prof-stats{font-size:14.5px;margin:12px 2px}
+.climb-card .km b{background:var(--ink);color:var(--yellow)}
+.climb-mini{flex:0 0 auto;width:120px;border:2px solid var(--ink);border-radius:8px;overflow:hidden;background:var(--chalk);align-self:stretch}
+.climb-mini canvas{display:block;width:100%;height:100%}
+.card.flashTarget{animation:flash 1.2s ease-out}
+
+/* weerkaart */
+.weather-card{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 24px;
+  border:2px solid var(--ink);border-radius:10px;padding:14px 16px;background:#fff;box-shadow:var(--shadow-sm)}
+.weather-card h3{grid-column:1/-1;margin:0 0 4px;font-size:17px;font-weight:800}
+.weather-card p{margin:0;font-size:14px;color:var(--muted)}
+.weather-src{font-size:12px;color:var(--muted);margin:10px 2px 0}
+.wind-par{font-size:14.5px;margin:14px 2px 0}
+.wind-par b{display:block;margin-bottom:4px}
+
+/* kaartmarkeringen: klim-pin & windpijl */
+.climb-pin{background:var(--orange-deep);color:#fff;border:2px solid #fff;border-radius:50%;
+  width:26px;height:26px;display:grid;place-items:center;font:800 13px/1 "Archivo",sans-serif;
+  box-shadow:0 0 0 2px var(--ink);cursor:pointer}
+.climb-pin:hover{background:var(--ink)}
+.wind-arrow{color:#1D4ED8;font-size:22px;line-height:1;text-shadow:0 0 3px #fff,0 0 3px #fff;
+  transform-origin:50% 50%;pointer-events:auto}
+.dutch-note{font-size:12px;color:var(--muted);margin-top:10px}
+
 .workspace{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(360px,1fr);min-height:560px;
   border:2px solid var(--ink);border-top:none;border-radius:0 0 var(--radius) var(--radius);overflow:hidden;box-shadow:var(--shadow)}
 .map{min-height:420px}

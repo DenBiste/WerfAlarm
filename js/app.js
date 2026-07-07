@@ -10,7 +10,7 @@
   const $ = id => {
     const el = document.getElementById(id);
     if (el) return el;
-    console.warn(`WerfAlarm: element #${id} ontbreekt — pagina en script zijn mogelijk verschillende versies. Ververs met Ctrl+F5.`);
+    console.warn(`Route Info: element #${id} ontbreekt — pagina en script zijn mogelijk verschillende versies. Ververs met Ctrl+F5.`);
     const absorb = new Proxy(function () {}, {
       get: (t, p) => (p === Symbol.toPrimitive ? () => "" : absorb),
       set: () => true,
@@ -19,6 +19,16 @@
     return absorb;
   };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* UI-vertaalhelper: leest de actieve interfacetaal (i18n.js) */
+  const T = (k, ...a) => {
+    const d = window.I18N ? I18N.ui() : null;
+    const v = d && d[k];
+    return typeof v === "function" ? v(...a) : (v ?? "");
+  };
+  const uiLoc = () => (window.I18N ? I18N.ui().locale : "nl-BE");
+  const modesLabelL = (modes, L) => modes.size === 3 ? L.allUsers
+    : ["bike", "ped", "motor"].filter(m => modes.has(m)).map(m => L.modes[m]).join(" + ");
 
   /* ---------------- state ---------------- */
   let route = null;       // gebouwd door Geom.buildRoute()
@@ -30,6 +40,9 @@
   const map = L.map("map", { scrollWheelZoom: true }).setView([50.95, 4.9], 9);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(map);
   let routeLayer = null, startMarker = null, markers = [];
+  const hinderLayer = L.layerGroup().addTo(map);   // werven (zones + stippen)
+  const climbLayer  = L.layerGroup().addTo(map);   // klim-pins
+  const windLayer   = L.layerGroup().addTo(map);   // windpijlen
 
   function drawRoute() {
     if (routeLayer) map.removeLayer(routeLayer);
@@ -40,7 +53,7 @@
       .addTo(map).bindTooltip("Start");
     map.fitBounds(routeLayer.getBounds().pad(0.05));
   }
-  function clearMarkers() { markers.forEach(m => map.removeLayer(m)); markers = []; }
+  function clearMarkers() { hinderLayer.clearLayers(); markers = []; }
 
   /* ---------------- GPX laden ---------------- */
   async function loadFile(file) {
@@ -65,12 +78,13 @@
     $("strip").hidden = true;
     $("dlgpx").disabled = true;
     $("report").disabled = true;
-    $("routeinfo").innerHTML = `<b>${esc(route.name)}</b> · ${route.km.toFixed(1)} km · ${route.tiles.length} zones`;
-    $("footroute").textContent = `Route: ${route.name}, ${route.km.toFixed(1)} km, ${pts.length} punten`;
+    $("routeinfo").innerHTML = T("routeInfo", esc(route.name), route.km.toFixed(1), route.tiles.length);
+    $("footroute").textContent = T("footRoute", route.name, route.km.toFixed(1), pts.length);
     $("run").disabled = false;
-    $("status").textContent = "Klaar om te controleren.";
+    $("status").textContent = T("statusReady");
     $("error").style.display = "none";
-    $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>Route geladen. Kies je ritdatum en klik op <b>Controleer route</b>.</div>`;
+    $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>${T("emptyLoaded")}</div>`;
+    initSections();   // hoogteprofiel + weer alvast opbouwen (async)
     document.getElementById("app").scrollIntoView({ behavior: "smooth" });
   }
 
@@ -111,7 +125,7 @@
     const seen = new Map();
     const setP = (d, t) => {
       $("bar").firstElementChild.style.width = (100 * d / t) + "%";
-      $("status").textContent = `Bevraagt GIPOD… ${d}/${t}`;
+      $("status").textContent = T("statusQuery", d, t);
     };
     setP(0, 1);
 
@@ -137,10 +151,8 @@
       }, setP));
     } catch (e) {
       $("error").style.display = "block";
-      $("error").innerHTML = `<b>Kon de GIPOD-dienst niet bevragen.</b> (${esc(e.message)})<br>` +
-        `Controleer je internetverbinding of raadpleeg handmatig ` +
-        `<a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">geopunt.be/hinder-in-kaart</a>.`;
-      $("run").disabled = false; $("status").textContent = "Mislukt.";
+      $("error").innerHTML = T("gipodFailHtml") + ` <span class="note">(${esc(e.message)})</span>`;
+      $("run").disabled = false; $("status").textContent = T("statusFail");
       return;
     }
 
@@ -161,9 +173,10 @@
     $("run").disabled = false;
     $("dlgpx").disabled = !list.length;
     $("report").disabled = false;
-    const cacheNote = fromCache === route.tiles.length * 2 ? " · uit cache" : "";
-    const forWho = modes.size === 3 ? "" : ` voor ${modesLabel(modes)}`;
-    $("status").textContent = `Klaar — ${list.length} ${onlyHard ? "blokkade(s)" : "hinder(s)"}${forWho} actief op ${rideDate.toLocaleDateString("nl-BE")}.${cacheNote}`;
+    const cacheNote = fromCache === route.tiles.length * 2 ? T("fromCache") : "";
+    const forWho = modes.size === 3 ? "" : T("forUsers", modesLabelL(modes, repLang()));
+    $("status").textContent = T("statusDone", list.length, onlyHard, forWho, rideDate.toLocaleDateString(uiLoc()), cacheNote);
+    renderPageWeather();   // ritdatum kan gewijzigd zijn
     $("bar").firstElementChild.style.width = "100%";
   }
 
@@ -216,8 +229,8 @@
   function renderStrip(list) {
     const strip = $("strip");
     strip.innerHTML = `<div class="strip-line"></div>
-      <div class="strip-start" style="left:26px" title="Start"></div>
-      <div class="strip-end" style="left:calc(100% - 26px)" title="Aankomst"></div>
+      <div class="strip-start" style="left:26px" title="${T("stripStart")}"></div>
+      <div class="strip-end" style="left:calc(100% - 26px)" title="${T("stripFinish")}"></div>
       <span class="strip-label" style="left:26px">0</span>
       <span class="strip-label" style="left:calc(100% - 26px)">${route.km.toFixed(0)} km</span>`;
     list.forEach((r, i) => {
@@ -226,10 +239,10 @@
         const tick = document.createElement("button");
         tick.className = "strip-tick" + (isHardFor(r, view.modes) ? " hard" : "");
         tick.style.left = `calc(26px + (100% - 52px) * ${pct.toFixed(4)})`;
-        tick.title = `km ${km.toFixed(1)} — ${r.desc}` +
-          (r.kms.length > 1 ? ` (passage ${r.kms.indexOf(km) + 1}/${r.kms.length})` : "") +
-          (isHardFor(r, view.modes) ? " (blokkade)" : "");
-        tick.setAttribute("aria-label", `Werf op kilometer ${km.toFixed(1)}: ${r.desc}`);
+        tick.title = T("stripTick", km.toFixed(1), r.desc) +
+          (r.kms.length > 1 ? T("stripPass", r.kms.indexOf(km) + 1, r.kms.length) : "") +
+          (isHardFor(r, view.modes) ? T("stripBlock") : "");
+        tick.setAttribute("aria-label", T("werfAria", km.toFixed(1), r.desc));
         tick.innerHTML = "<span></span>";
         tick.addEventListener("click", () => cardFocus[i] && cardFocus[i](true));
         strip.appendChild(tick);
@@ -255,7 +268,7 @@
     const blob = new Blob([out], { type: "application/gpx+xml" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-") + "-werfalarm.gpx";
+    a.download = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-") + "-route-info.gpx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
@@ -329,15 +342,15 @@
   function segRow() {
     const row = document.createElement("div"); row.className = "seg-row";
     const filterSeg = view.onlyHard
-      ? `<span class="hardtag" style="margin:0;align-self:center">⛔ Berekend: enkel blokkades</span>`
+      ? `<span class="hardtag" style="margin:0;align-self:center">${T("calcHardBadge")}</span>`
       : `<div class="seg" role="group" aria-label="Filter">
-           <button class="seg-btn" data-f="all" aria-pressed="${!view.filterHard}">Alles (${view.list.length})</button>
-           <button class="seg-btn" data-f="hard" aria-pressed="${view.filterHard}">⛔ Blokkades (${view.list.filter(r => isHardFor(r, view.modes)).length})</button>
+           <button class="seg-btn" data-f="all" aria-pressed="${!view.filterHard}">${T("segAll", view.list.length)}</button>
+           <button class="seg-btn" data-f="hard" aria-pressed="${view.filterHard}">${T("segHard", view.list.filter(r => isHardFor(r, view.modes)).length)}</button>
          </div>`;
     row.innerHTML = filterSeg +
-      `<div class="seg" role="group" aria-label="Sortering">
-         <button class="seg-btn" data-s="km" aria-pressed="${view.sortBy === "km"}">Op km</button>
-         <button class="seg-btn" data-s="sev" aria-pressed="${view.sortBy === "sev"}">Op ernst</button>
+      `<div class="seg" role="group" aria-label="Sort">
+         <button class="seg-btn" data-s="km" aria-pressed="${view.sortBy === "km"}">${T("segKm")}</button>
+         <button class="seg-btn" data-s="sev" aria-pressed="${view.sortBy === "sev"}">${T("segSev")}</button>
        </div>`;
     row.querySelectorAll("[data-f]").forEach(b =>
       b.addEventListener("click", () => { view.filterHard = b.dataset.f === "hard"; refresh(); }));
@@ -351,8 +364,8 @@
     cardFocus.length = 0;
     clearMarkers();
     const { rideDate, truncated, range } = view;
-    const scope = range === 0 ? "op je track zelf" : `binnen ${range} m van je route`;
-    const dateStr = rideDate.toLocaleDateString("nl-BE");
+    const scope = range === 0 ? T("scope0") : T("scopeN", range);
+    const dateStr = rideDate.toLocaleDateString(uiLoc());
 
     const mk = r => {
       const hard = isHardFor(r, view.modes);
@@ -364,20 +377,20 @@
         `<div class="km"><b>${multi ? r.kms.length + "× KM" : "KM"}</b><span>${r.km.toFixed(1)}</span></div>
          <div class="body"><h3>${esc(r.desc)}</h3>
          <div class="meta">${r.cat ? `<b>${esc(r.cat)}</b> · ` : ""}${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` +
-        `${r.owner ? ` · ${esc(r.owner)}` : ""}${r.dist > 10 ? ` · ${r.dist} m van je track` : " · op je track"}` +
-        `${multi ? `<br><b>Je passeert hier ${r.kms.length}×:</b> km ${kmList}` : ""}</div>
+        `${r.owner ? ` · ${esc(r.owner)}` : ""}${r.dist > 10 ? ` · ${T("fromTrack", r.dist)}` : ` · ${T("onTrack")}`}` +
+        `${multi ? `<br><b>${esc(T("passages", r.kms.length, kmList))}</b>` : ""}</div>
          ${consTxt ? `<div class="cons">${hard ? "<em>" : ""}${esc(consTxt)}${hard ? "</em>" : ""}</div>` : ""}
-         <span class="chip">Actief op ${dateStr}</span>${hard ? `<span class="hardtag">⛔ Blokkade</span>` : ""}</div>`;
+         <span class="chip">${T("activeOn", dateStr)}</span>${hard ? `<span class="hardtag">${T("blockTag")}</span>` : ""}</div>`;
 
       const popup = `<b>km ${kmList} — ${esc(r.desc)}</b><br>${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}<br>${esc(consTxt)}`;
       /* de getroffen zone zelf, zoals op geopunt.be/hinder-in-kaart */
       const zone = L.geoJSON(r.geom, {
         style: { color: hard ? "#A61E04" : "#D9480F", weight: 3, opacity: .9, fillColor: "#E8590C", fillOpacity: .35 },
         pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 8, color: "#fff", weight: 2, fillColor: "#D9480F", fillOpacity: .95 })
-      }).addTo(map).bindPopup(popup);
+      }).addTo(hinderLayer).bindPopup(popup);
       const b0 = zone.getBounds(), ctr = b0.isValid() ? b0.getCenter() : L.latLng(r.lat, r.lon);
       const dot = L.circleMarker(ctr, { radius: 5, color: "#fff", weight: 1.5, fillColor: hard ? "#A61E04" : "#D9480F", fillOpacity: .95 })
-        .addTo(map).bindPopup(popup);
+        .addTo(hinderLayer).bindPopup(popup);
       markers.push(zone, dot);
 
       const focus = (fromStrip) => {
@@ -395,26 +408,29 @@
       return el;
     };
 
-    const forWho = view.modes.size === 3 ? "" : ` voor ${modesLabel(view.modes)}`;
+    const forWho = view.modes.size === 3 ? "" : T("forUsers", modesLabelL(view.modes, repLang()));
     if (!view.list.length) {
       out.innerHTML = view.onlyHard
-        ? `<div class="empty"><span class="empty-icon">🎉</span><strong>Geen blokkades${forWho}!</strong><br>Geen afsluitingen of omleidingen gevonden ${scope} op ${dateStr}. Lichtere hinder werd niet berekend — vink de filter uit voor het volledige beeld.</div>`
-        : `<div class="empty"><span class="empty-icon">🎉</span><strong>Vrije baan${forWho ? " " + forWho.trim() : ""}!</strong><br>Geen hinder${forWho} gevonden ${scope} op ${dateStr}. Goede rit!</div>`;
+        ? `<div class="empty"><span class="empty-icon">🎉</span><strong>${T("noBlocksTitle", forWho)}</strong><br>${T("noBlocksBody", scope, dateStr)}</div>`
+        : `<div class="empty"><span class="empty-icon">🎉</span><strong>${T("freeTitle", forWho)}</strong><br>${T("freeBody", scope, dateStr)}</div>`;
     } else {
       out.appendChild(segRow());
       const h = document.createElement("h2");
       h.textContent = (view.onlyHard || view.filterHard)
-        ? `Blokkades${forWho} ${scope} op ${dateStr} (${shown.length})`
-        : `Hinder${forWho} ${scope} op ${dateStr} (${shown.length})`;
+        ? T("hdrBlocks", forWho, scope, dateStr, shown.length)
+        : T("hdrAll", forWho, scope, dateStr, shown.length);
       out.appendChild(h);
       if (!shown.length) {
         out.insertAdjacentHTML("beforeend",
-          `<div class="empty"><span class="empty-icon">👍</span><strong>Geen blokkades</strong><br>Wel ${view.list.length} lichtere hinder(s) — schakel terug naar “Alles” om ze te bekijken.</div>`);
-      } else shown.forEach(r => out.appendChild(mk(r)));
+          `<div class="empty"><span class="empty-icon">👍</span><strong>${T("noBlocksSub")}</strong><br>${T("noBlocksFiltered", view.list.length)}</div>`);
+      } else {
+        shown.forEach(r => out.appendChild(mk(r)));
+        out.insertAdjacentHTML("beforeend", `<p class="dutch-note">${T("dutchNote")}</p>`);
+      }
     }
     if (truncated) {
       const p = document.createElement("p"); p.className = "note";
-      p.textContent = "⚠ Minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.";
+      p.textContent = T("truncNote");
       out.appendChild(p);
     }
   }
@@ -473,7 +489,7 @@
 
     return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WerfAlarm-rapport — ${esc(route.name)}</title>
+<title>Route Info-rapport — ${esc(route.name)}</title>
 <style>
  body{font-family:system-ui,sans-serif;background:#F4F2EC;color:#141619;max-width:820px;margin:0 auto;padding:24px;line-height:1.5}
  .stripes{height:12px;background:repeating-linear-gradient(-45deg,#F4590B 0 16px,#fff 16px 32px);border:2px solid #141619;border-radius:6px}
@@ -494,14 +510,14 @@
  footer{font-size:12px;color:#565E68;margin-top:22px}
 </style></head><body>
 <div class="stripes"></div>
-<h1>WERF<span>ALARM</span> — rapport</h1>
+<h1>ROUTE<span> INFO</span> — rapport</h1>
 <p class="sub"><b>${esc(route.name)}</b> · ${route.km.toFixed(1)} km · ritdatum <b>${dateStr}</b> · zoekafstand ${scope}${view.modes.size !== 3 ? ` · <b>weggebruikers: ${modesLabel(view.modes)}</b>` : ""}${view.onlyHard ? " · <b>filter: enkel blokkades ⛔</b>" : ""} · gemaakt op ${now}</p>
 <div class="box">${mapSvg}</div>
 <div class="box">${stripSvg}</div>
 ${list.length ? rows : `<div class="ok">🎉 <b>${view.onlyHard ? "Geen blokkades!" : "Vrije baan!"}</b> ${view.onlyHard ? "Geen afsluitingen of omleidingen op deze route op " + dateStr + " (lichtere hinder niet berekend)." : "Geen hinder gevonden op deze route op " + dateStr + "."}</div>`}
 ${truncated ? `<p class="sub">⚠ Minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.</p>` : ""}
 <footer>Bron: GIPOD open data (geo.api.vlaanderen.be), dezelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen.
-Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertrek opnieuw.</footer>
+Gegenereerd met Route Info; de situatie kan wijzigen, controleer kort voor vertrek opnieuw.</footer>
 </body></html>`;
   }
 
@@ -740,19 +756,19 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       cSlot: t => [`At the top, at ${t} m, you can breathe again.`, `The summit sits at ${t} m.`, `Up top, ${t} m awaits — and a brief respite.`]
     }
   };
-  const repLang = () => REPL[document.getElementById("replang") && document.getElementById("replang").value === "en" ? "en" : "nl"];
+  const repLang = () => REPL[(window.I18N && I18N.lang === "en") ? "en" : "nl"];
   const compassL = (deg, L) => L.compass[Math.round(deg / 22.5) % 16];
 
   /* Dagvoorspelling van Open-Meteo voor het middelpunt van de route.
      We tonen de voorspelling voor de ritdatum als die binnen het
      voorspellingsbereik (±15 dagen) valt, anders voor vandaag. */
-  async function fetchWeather() {
+  async function fetchWeather(forDate) {
     const lats = route.pts.map(p => p[0]), lons = route.pts.map(p => p[1]);
     const lat = (Math.min(...lats) + Math.max(...lats)) / 2;
     const lon = (Math.min(...lons) + Math.max(...lons)) / 2;
     const today = new Date(); today.setHours(12, 0, 0, 0);
-    const ahead = Math.round((view.rideDate - today) / 864e5);
-    const target = (ahead >= 0 && ahead <= 15) ? view.rideDate : today;
+    const ahead = Math.round((forDate - today) / 864e5);
+    const target = (ahead >= 0 && ahead <= 15) ? forDate : today;
     const iso = target.toLocaleDateString("en-CA");
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,` +
@@ -855,7 +871,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     let mapImg = null, profile = null, weather = null;
     try { mapImg = await buildMapImage(list, L); } catch (e) { /* schematisch kaartje als vangnet */ }
     try { profile = await ensureProfile(); } catch (e) { profile = null; }
-    try { weather = await fetchWeather(); } catch (e) { weather = null; }
+    try { weather = await fetchWeather(view.rideDate); } catch (e) { weather = null; }
 
     const stripes = yy => {
       doc.setFillColor(...ORANGEc); doc.rect(0, yy, W, 7, "F");
@@ -872,9 +888,9 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     stripes(0);
     y = 20;
     doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(...INKc);
-    doc.text("WERF", M, y);
-    doc.setTextColor(...ORANGEc); doc.text("ALARM", M + doc.getTextWidth("WERF"), y);
-    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("WERFALARM"), y);
+    doc.text("ROUTE", M, y);
+    doc.setTextColor(...ORANGEc); doc.text(" INFO", M + doc.getTextWidth("ROUTE"), y);
+    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("ROUTE INFO"), y);
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
     /* ook de infolijnen afbreken op paginabreedte (lange routenamen!) */
@@ -1176,12 +1192,207 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     return doc;
   }
 
+  /* =========================================================
+     PAGINAHOOFDSTUKKEN — spiegel van het PDF-rapport
+     + kaartlagen (blokkades / hoogteprofiel / weer & wind)
+     ========================================================= */
+  const LAYERS = { blocks: true, profile: true, weather: true };
+  let pageProf = null, pageClimbs = [], pageWeather = null;
+
+  const currentRideDate = () => {
+    const d = new Date($("ridedate").value || Date.now()); d.setHours(12); return d;
+  };
+
+  function applyLayers() {
+    /* kaartlagen */
+    LAYERS.blocks ? map.addLayer(hinderLayer) : map.removeLayer(hinderLayer);
+    LAYERS.profile ? map.addLayer(climbLayer) : map.removeLayer(climbLayer);
+    LAYERS.weather ? map.addLayer(windLayer) : map.removeLayer(windLayer);
+    /* paginadelen */
+    const secP = document.getElementById("secProfile"), secW = document.getElementById("secWeather");
+    if (secP) secP.hidden = !LAYERS.profile || !route;
+    if (secW) secW.hidden = !LAYERS.weather || !route;
+    const outEl = document.getElementById("out"), stripEl = document.getElementById("strip");
+    if (outEl) outEl.style.display = LAYERS.blocks ? "" : "none";
+    if (stripEl && view) stripEl.hidden = !LAYERS.blocks;
+    document.querySelectorAll(".layer-btn").forEach(b =>
+      b.setAttribute("aria-pressed", LAYERS[b.dataset.layer]));
+  }
+  document.querySelectorAll(".layer-btn").forEach(b =>
+    b.addEventListener("click", () => { LAYERS[b.dataset.layer] = !LAYERS[b.dataset.layer]; applyLayers(); }));
+
+  /* ---------- hoofdstuk: hoogteprofiel & klimmen ---------- */
+  function drawProfCanvas(canvas, prof, climbs, minE, maxE) {
+    const ctx = canvas.getContext("2d");
+    const cw = canvas.width, ch = canvas.height;
+    ctx.clearRect(0, 0, cw, ch);
+    const kmax = prof.km[prof.km.length - 1] || 1;
+    const e0 = minE ?? prof.min, e1 = maxE ?? prof.max;
+    const padB = 26, padT = 22, padR = 56;
+    const sx = k => 10 + (k / kmax) * (cw - 10 - padR);
+    const sy = e => ch - padB - ((e - e0) / Math.max(e1 - e0, 1)) * (ch - padB - padT);
+    const area = (km, ele, fill) => {
+      ctx.beginPath(); ctx.moveTo(sx(km[0]), ch - padB);
+      for (let i = 0; i < km.length; i++) ctx.lineTo(sx(km[i]), sy(ele[i]));
+      ctx.lineTo(sx(km[km.length - 1]), ch - padB); ctx.closePath();
+      ctx.fillStyle = fill; ctx.fill();
+    };
+    area(prof.km, prof.ele, "#DEE4EE");
+    for (const c of (climbs || [])) area(c.slice.km, c.slice.ele, "#FDD8BE");
+    ctx.beginPath();
+    prof.km.forEach((k, i) => i ? ctx.lineTo(sx(k), sy(prof.ele[i])) : ctx.moveTo(sx(k), sy(prof.ele[i])));
+    ctx.strokeStyle = "#2F5AA8"; ctx.lineWidth = 3; ctx.lineJoin = "round"; ctx.stroke();
+    ctx.strokeStyle = "#141619"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(10, ch - padB); ctx.lineTo(cw - padR + 10, ch - padB); ctx.stroke();
+    ctx.font = "bold 18px Archivo, sans-serif"; ctx.fillStyle = "#565E68";
+    ctx.fillText("0", 10, ch - 6);
+    ctx.textAlign = "right"; ctx.fillText(`${kmax.toFixed(0)} km`, cw - padR + 10, ch - 6);
+    ctx.textAlign = "left";
+    ctx.fillText(`${e1} m`, cw - padR + 16, sy(e1) + 6);
+    ctx.fillText(`${e0} m`, cw - padR + 16, sy(e0) + 6);
+    (climbs || []).forEach((c, i) => {
+      const px = sx(c.endKm), py = sy(c.topEle) - 14;
+      ctx.beginPath(); ctx.arc(px, py, 13, 0, 7);
+      ctx.fillStyle = "#D9480F"; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "#fff"; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center";
+      ctx.font = "bold 15px Archivo, sans-serif";
+      ctx.fillText(String(i + 1), px, py + 5); ctx.textAlign = "left";
+    });
+  }
+
+  function syncClimbPins() {
+    climbLayer.clearLayers();
+    pageClimbs.forEach((c, i) => {
+      const [lat, lon] = Geom.pointAtChain(route, c.endKm * 1000);
+      L.marker([lat, lon], {
+        icon: L.divIcon({ className: "", html: `<div class="climb-pin">${i + 1}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+        title: T("climbPinTitle", i + 1, c.endKm.toFixed(1)), keyboard: true
+      }).addTo(climbLayer).on("click", () => focusClimb(i));
+    });
+  }
+
+  function focusClimb(i) {
+    if (!LAYERS.profile) { LAYERS.profile = true; applyLayers(); }
+    const el = document.getElementById("climb-" + i);
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("flashTarget"); void el.offsetWidth; el.classList.add("flashTarget");
+  }
+
+  async function renderPageProfile() {
+    const sec = document.getElementById("secProfile");
+    if (!sec || !route) return;
+    if (pageProf === null) { try { pageProf = await ensureProfile(); } catch (e) { pageProf = null; } }
+    const L = repLang();
+    const body = document.getElementById("climbCards");
+    if (!pageProf) {
+      pageClimbs = [];
+      document.getElementById("profStats").textContent = T("profNoData");
+      body.innerHTML = ""; syncClimbPins(); applyLayers(); return;
+    }
+    pageClimbs = Geom.findClimbs(pageProf);
+    drawProfCanvas(document.getElementById("profChart"), pageProf, pageClimbs);
+    document.getElementById("profStats").textContent =
+      san(L.profStats(pageProf.ascent, route.km.toFixed(1), pageProf.min, pageProf.max, pageClimbs.length));
+    body.innerHTML = "";
+    if (!pageClimbs.length) {
+      body.innerHTML = `<p class="note">${esc(san(L.flat))}</p>`;
+    }
+    pageClimbs.forEach((c, i) => {
+      const card = document.createElement("div");
+      card.className = "card climb-card"; card.id = "climb-" + i;
+      card.innerHTML =
+        `<div class="climb-mini"><canvas width="240" height="150"></canvas></div>
+         <div class="km"><b>${i + 1}</b><span>${c.endKm.toFixed(1)}</span></div>
+         <div class="body">
+           <h3>${esc(san(L.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1))))}</h3>
+           <div class="meta"><b>${esc(san(L.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max)))}</b></div>
+           <div class="cons" style="margin-top:6px;color:var(--muted)">${esc(san(climbStory(c, i, pageClimbs, L)))}</div>
+         </div>`;
+      body.appendChild(card);
+      drawProfCanvas(card.querySelector("canvas"),
+        { km: c.slice.km.map(k => k - c.startKm), ele: c.slice.ele, min: c.startEle, max: c.topEle },
+        null, c.startEle, c.topEle);
+      card.addEventListener("click", () => {
+        const [lat, lon] = Geom.pointAtChain(route, c.endKm * 1000);
+        map.setView([lat, lon], 14);
+      });
+    });
+    syncClimbPins();
+    applyLayers();
+  }
+
+  /* ---------- hoofdstuk: weer & wind ---------- */
+  function syncWindArrows() {
+    windLayer.clearLayers();
+    if (!pageWeather || !route) return;
+    const L = repLang();
+    const n = Math.max(4, Math.min(14, Math.round(route.km / 9)));
+    const rot = ((pageWeather.dir + 180) - 90);   // ➤ wijst standaard naar rechts (oost)
+    for (let i = 1; i <= n; i++) {
+      const [lat, lon] = Geom.pointAtChain(route, route.km * 1000 * i / (n + 1));
+      L.marker([lat, lon], {
+        icon: L.divIcon({ className: "", html: `<span class="wind-arrow" style="display:inline-block;transform:rotate(${rot}deg)">➤</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
+        interactive: true, keyboard: false
+      }).addTo(windLayer)
+        .bindTooltip(T("windArrowTip", Math.round(pageWeather.wind), compassL(pageWeather.dir, L)));
+    }
+  }
+
+  async function renderPageWeather() {
+    const sec = document.getElementById("secWeather");
+    if (!sec || !route) return;
+    try { pageWeather = await fetchWeather(currentRideDate()); } catch (e) { pageWeather = null; }
+    renderWeatherHtml();
+  }
+  function renderWeatherHtml() {
+    const L = repLang(), body = document.getElementById("weatherBody");
+    if (!body || !route) return;
+    if (!pageWeather) {
+      body.innerHTML = `<p class="note">${esc(T("weerNoData"))}</p>`;
+      syncWindArrows(); applyLayers(); return;
+    }
+    const w = pageWeather;
+    const wd = w.date.toLocaleDateString(uiLoc(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    body.innerHTML =
+      `<div class="weather-card">
+         <h3>${esc(san(L.forecastFor(wd, w.isRideDate, L.wmo(w.code))))}</h3>
+         <p>${esc(san(L.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
+         <p>${esc(san(L.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
+         <p>${esc(san(L.wWind(Math.round(w.wind), compassL(w.dir, L), Math.round(w.gust))))}</p>
+         <p>${esc(san(L.wCloud(Math.round(w.cloud))))}</p>
+       </div>
+       <p class="wind-par"><b>${esc(T("windHeader"))}</b>${esc(san(windStory(w, L)))}</p>
+       <p class="weather-src">${esc(san(L.wSrc(new Date().toLocaleString(uiLoc(), { dateStyle: "short", timeStyle: "short" }))))}</p>`;
+    syncWindArrows();
+    applyLayers();
+  }
+
+  function initSections() {
+    pageProf = null; pageWeather = null;
+    renderPageProfile();
+    renderPageWeather();
+  }
+
+  /* ---------- taalwissel: alles hertekenen in de nieuwe taal ---------- */
+  if (window.I18N) I18N.onChange(() => {
+    if (route) {
+      $("routeinfo").innerHTML = T("routeInfo", esc(route.name), route.km.toFixed(1), route.tiles.length);
+      $("footroute").textContent = T("footRoute", route.name, route.km.toFixed(1), route.rawPts.length);
+      renderPageProfile();
+      renderWeatherHtml();
+    }
+    if (view) refresh();
+    else $("status").textContent = route ? T("statusReady") : T("statusLoadFirst");
+  });
+
   $("report").addEventListener("click", async () => {
     if (!view) return;
     const btn = $("report"), old = btn.textContent;
-    btn.disabled = true; btn.textContent = "PDF maken…";
+    btn.disabled = true; btn.textContent = T("pdfBusy");
     const slug = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-").toLowerCase();
-    const base = `werfalarm-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
+    const base = `route-info-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
     try {
       await loadJsPDF();
       (await buildReportPdf()).save(base + ".pdf");
@@ -1193,7 +1404,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       a.download = base + ".html";
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      $("status").textContent = "PDF-bibliotheek niet beschikbaar — HTML-rapport gedownload.";
+      $("status").textContent = T("pdfFallback");
     } finally {
       btn.disabled = false; btn.textContent = old;
     }
