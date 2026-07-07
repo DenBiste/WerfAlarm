@@ -519,7 +519,77 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
   /* PDF kan geen emoji/pijlen in de standaardfonts aan */
   const san = s => String(s).replace(/→/g, "->").replace(/⛔/g, "").replace(/[^\x20-\xFF\n]/g, "").replace(/\s+/g, " ").trim();
 
-  function buildReportPdf() {
+  /* Echte kaartafbeelding voor het rapport: OSM-tegels + route + markers op een
+     canvas. Faalt dit (offline, geblokkeerde tegels), dan valt het rapport
+     terug op het schematische kaartje. */
+  async function buildMapImage(list) {
+    const S = 2, cw = 780, ch = 360;                       // 780×360 ≙ 182×84 mm in het rapport
+    const canvas = document.createElement("canvas");
+    canvas.width = cw * S; canvas.height = ch * S;
+    const ctx = canvas.getContext("2d"); ctx.scale(S, S);
+
+    const lats = route.pts.map(p => p[0]), lons = route.pts.map(p => p[1]);
+    let la0 = Math.min(...lats), la1 = Math.max(...lats), lo0 = Math.min(...lons), lo1 = Math.max(...lons);
+    const padLat = (la1 - la0) * .08 + .002, padLon = (lo1 - lo0) * .08 + .002;
+    la0 -= padLat; la1 += padLat; lo0 -= padLon; lo1 += padLon;
+
+    const lon2x = (lon, z) => (lon + 180) / 360 * Math.pow(2, z);
+    const lat2y = (lat, z) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * Math.pow(2, z); };
+    let z = 15;
+    while (z > 3) {
+      const wpx = (lon2x(lo1, z) - lon2x(lo0, z)) * 256, hpx = (lat2y(la0, z) - lat2y(la1, z)) * 256;
+      if (wpx <= cw && hpx <= ch) break; z--;
+    }
+    const cx = (lon2x(lo0, z) + lon2x(lo1, z)) / 2, cy = (lat2y(la0, z) + lat2y(la1, z)) / 2;
+    const px0 = cx * 256 - cw / 2, py0 = cy * 256 - ch / 2;
+    const X = lon => lon2x(lon, z) * 256 - px0, Y = lat => lat2y(lat, z) * 256 - py0;
+
+    /* tegels ophalen (individuele missers zijn geen ramp) */
+    const jobs = [];
+    for (let tx = Math.floor(px0 / 256); tx <= Math.floor((px0 + cw) / 256); tx++)
+      for (let ty = Math.floor(py0 / 256); ty <= Math.floor((py0 + ch) / 256); ty++)
+        jobs.push(new Promise(res => {
+          const img = new Image(); img.crossOrigin = "anonymous";
+          let settled = false; const done = ok => { if (!settled) { settled = true; res(ok ? { img, tx, ty } : null); } };
+          img.onload = () => done(true); img.onerror = () => done(false);
+          setTimeout(() => done(false), 7000);
+          img.src = `https://tile.openstreetmap.org/${z}/${tx}/${ty}.png`;
+        }));
+    const loaded = (await Promise.all(jobs)).filter(Boolean);
+    if (!loaded.length) throw new Error("geen kaarttegels beschikbaar");
+
+    ctx.fillStyle = "#EDECE5"; ctx.fillRect(0, 0, cw, ch);
+    for (const t of loaded) ctx.drawImage(t.img, t.tx * 256 - px0, t.ty * 256 - py0, 256, 256);
+
+    const dot = (x, y, r, c) => { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke(); };
+
+    /* route met witte rand voor leesbaarheid op de kaart */
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath();
+    route.pts.forEach((p, i) => i ? ctx.lineTo(X(p[1]), Y(p[0])) : ctx.moveTo(X(p[1]), Y(p[0])));
+    ctx.strokeStyle = "#fff"; ctx.lineWidth = 6; ctx.stroke();
+    ctx.strokeStyle = "#2F5AA8"; ctx.lineWidth = 3.5; ctx.stroke();
+    dot(X(route.pts[0][1]), Y(route.pts[0][0]), 5, "#2B8A3E");
+
+    ctx.font = "bold 11px Arial"; ctx.textAlign = "center";
+    for (const r of list) for (const km of r.kms) {
+      const [lat, lon] = Geom.pointAtChain(route, km * 1000);
+      dot(X(lon), Y(lat), 6, isHardFor(r, view.modes) ? "#A61E04" : "#D9480F");
+      const label = "km " + km.toFixed(1);
+      ctx.lineWidth = 3; ctx.strokeStyle = "#fff"; ctx.strokeText(label, X(lon), Y(lat) - 9);
+      ctx.fillStyle = "#141619"; ctx.fillText(label, X(lon), Y(lat) - 9);
+    }
+    /* verplichte bronvermelding */
+    ctx.font = "10px Arial"; ctx.textAlign = "right";
+    const at = "© OpenStreetMap-bijdragers";
+    const aw = ctx.measureText(at).width + 8;
+    ctx.fillStyle = "rgba(255,255,255,.82)"; ctx.fillRect(cw - aw - 4, ch - 16, aw, 13);
+    ctx.fillStyle = "#333"; ctx.fillText(at, cw - 8, ch - 6);
+
+    return { data: canvas.toDataURL("image/jpeg", .85) };
+  }
+
+  async function buildReportPdf() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const { list, rideDate, range, truncated } = view;
@@ -528,6 +598,8 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
           MUTEDc = [86, 94, 104], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [237, 236, 229];
     const dateStr = rideDate.toLocaleDateString("nl-BE");
     let y;
+    let mapImg = null;
+    try { mapImg = await buildMapImage(list); } catch (e) { /* schematisch kaartje als vangnet */ }
 
     const stripes = yy => {
       doc.setFillColor(...ORANGEc); doc.rect(0, yy, W, 7, "F");
@@ -556,29 +628,34 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     opts.push(`gemaakt op ${new Date().toLocaleString("nl-BE")}`);
     doc.text(san(opts.join(" · ")), M, y); y += 6;
 
-    /* ---- schematische kaart ---- */
-    const mapH = 82;
-    doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
-    doc.rect(M, y, CW, mapH, "FD");
-    const P = route.pts, lats = P.map(p => p[0]), lons = P.map(p => p[1]);
-    const la0 = Math.min(...lats), la1 = Math.max(...lats), lo0 = Math.min(...lons), lo1 = Math.max(...lons);
-    const pad = 8, k = Math.min((CW - 2 * pad) / Math.max(lo1 - lo0, 1e-9), (mapH - 2 * pad) / Math.max(la1 - la0, 1e-9));
-    const X = lon => M + pad + (lon - lo0) * k + (CW - 2 * pad - (lo1 - lo0) * k) / 2;
-    const Y = lat => y + mapH - pad - (lat - la0) * k - (mapH - 2 * pad - (la1 - la0) * k) / 2;
-    doc.setDrawColor(...ROUTEc); doc.setLineWidth(1.1);
-    const step = Math.max(1, Math.floor(P.length / 600));
-    let prev = P[0];
-    for (let i = step; i < P.length; i += step) { doc.line(X(prev[1]), Y(prev[0]), X(P[i][1]), Y(P[i][0])); prev = P[i]; }
-    doc.line(X(prev[1]), Y(prev[0]), X(P[P.length - 1][1]), Y(P[P.length - 1][0]));
-    doc.setFillColor(...OKc); doc.setDrawColor(255); doc.setLineWidth(.6);
-    doc.circle(X(P[0][1]), Y(P[0][0]), 1.9, "FD");
-    doc.setFontSize(7); doc.setFont("helvetica", "bold");
-    for (const r of list) for (const km of r.kms) {
-      const [lat, lon] = Geom.pointAtChain(route, km * 1000);
-      doc.setFillColor(...(isHardFor(r, view.modes) ? HARDc : DEEPc)); doc.setDrawColor(255);
-      doc.circle(X(lon), Y(lat), 2.1, "FD");
-      doc.setTextColor(...INKc);
-      doc.text(`km ${km.toFixed(1)}`, X(lon), Y(lat) - 3.2, { align: "center" });
+    /* ---- kaart (echte OSM-kaart; schematisch als vangnet) ---- */
+    const mapH = 84;
+    if (mapImg) {
+      doc.addImage(mapImg.data, "JPEG", M, y, CW, mapH);
+      doc.setDrawColor(...INKc); doc.setLineWidth(.6); doc.rect(M, y, CW, mapH, "D");
+    } else {
+      doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
+      doc.rect(M, y, CW, mapH, "FD");
+      const P = route.pts, lats = P.map(p => p[0]), lons = P.map(p => p[1]);
+      const la0 = Math.min(...lats), la1 = Math.max(...lats), lo0 = Math.min(...lons), lo1 = Math.max(...lons);
+      const pad = 8, k = Math.min((CW - 2 * pad) / Math.max(lo1 - lo0, 1e-9), (mapH - 2 * pad) / Math.max(la1 - la0, 1e-9));
+      const X = lon => M + pad + (lon - lo0) * k + (CW - 2 * pad - (lo1 - lo0) * k) / 2;
+      const Y = lat => y + mapH - pad - (lat - la0) * k - (mapH - 2 * pad - (la1 - la0) * k) / 2;
+      doc.setDrawColor(...ROUTEc); doc.setLineWidth(1.1);
+      const step = Math.max(1, Math.floor(P.length / 600));
+      let prev = P[0];
+      for (let i = step; i < P.length; i += step) { doc.line(X(prev[1]), Y(prev[0]), X(P[i][1]), Y(P[i][0])); prev = P[i]; }
+      doc.line(X(prev[1]), Y(prev[0]), X(P[P.length - 1][1]), Y(P[P.length - 1][0]));
+      doc.setFillColor(...OKc); doc.setDrawColor(255); doc.setLineWidth(.6);
+      doc.circle(X(P[0][1]), Y(P[0][0]), 1.9, "FD");
+      doc.setFontSize(7); doc.setFont("helvetica", "bold");
+      for (const r of list) for (const km of r.kms) {
+        const [lat, lon] = Geom.pointAtChain(route, km * 1000);
+        doc.setFillColor(...(isHardFor(r, view.modes) ? HARDc : DEEPc)); doc.setDrawColor(255);
+        doc.circle(X(lon), Y(lat), 2.1, "FD");
+        doc.setTextColor(...INKc);
+        doc.text(`km ${km.toFixed(1)}`, X(lon), Y(lat) - 3.2, { align: "center" });
+      }
     }
     y += mapH + 6;
 
@@ -606,15 +683,21 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
         : `Geen hinder gevonden op deze route op ${dateStr}. Goede rit!`), W / 2, y + 13.5, { align: "center" });
       y += 24;
     }
-    const tX = M + 27, tW = W - M - tX;
+    const tX = M + 27, tW = W - M - tX - 3;   // 3 mm binnenmarge rechts
     for (const r of list) {
       const hard = isHardFor(r, view.modes);
+      /* Belangrijk: splitTextToSize meet met het ACTIEVE font — dus vóór elke
+         meting exact het font/formaat instellen waarmee de tekst ook wordt afgedrukt. */
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
       const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  [BLOKKADE]" : ""), tW);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
       const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? r.dist + " m van de track" : "op de track"}`);
       const metaLines = doc.splitTextToSize(meta, tW);
-      const passLine = r.kms.length > 1 ? `Passages: km ${r.kms.map(k => k.toFixed(1)).join(" · ")}` : null;
       const consLines = consText(r) ? doc.splitTextToSize(san(consText(r)), tW) : [];
-      const h = 8 + titleLines.length * 4.6 + metaLines.length * 3.9 + (passLine ? 3.9 : 0) + consLines.length * 3.9 + 4.5;
+      doc.setFont("helvetica", "bold");
+      const passLines = r.kms.length > 1
+        ? doc.splitTextToSize(san(`Passages: km ${r.kms.map(k => k.toFixed(1)).join(" · ")}`), tW) : [];
+      const h = 8 + titleLines.length * 4.6 + metaLines.length * 3.9 + passLines.length * 3.9 + consLines.length * 3.9 + 4.5;
       if (y + h > 282) newPage();
 
       doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
@@ -633,7 +716,11 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       doc.text(titleLines, tX, ty); ty += titleLines.length * 4.6;
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...MUTEDc);
       doc.text(metaLines, tX, ty); ty += metaLines.length * 3.9;
-      if (passLine) { doc.setFont("helvetica", "bold"); doc.setTextColor(...INKc); doc.text(san(passLine), tX, ty); ty += 3.9; doc.setFont("helvetica", "normal"); }
+      if (passLines.length) {
+        doc.setFont("helvetica", "bold"); doc.setTextColor(...INKc);
+        doc.text(passLines, tX, ty); ty += passLines.length * 3.9;
+        doc.setFont("helvetica", "normal");
+      }
       if (consLines.length) { doc.setTextColor(...(hard ? HARDc : DEEPc)); doc.text(consLines, tX, ty); ty += consLines.length * 3.9; }
       doc.setTextColor(...ROUTEc); doc.setFontSize(8);
       doc.textWithLink("Bekijk op kaart", tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
@@ -665,7 +752,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     const base = `werfalarm-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
     try {
       await loadJsPDF();
-      buildReportPdf().save(base + ".pdf");
+      (await buildReportPdf()).save(base + ".pdf");
     } catch (e) {
       /* geen internet of bibliotheek faalt: HTML-rapport als vangnet */
       const blob = new Blob([buildReportHtml()], { type: "text/html" });
