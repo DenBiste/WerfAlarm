@@ -23,6 +23,7 @@ const I18N = (() => {
       /* ---------- topbar / hero / bento (index) ---------- */
       navStart: "Start", navGids: "Gids", navCheck: "Naar de check ↓",
       heroKicker: "Jouw verkenner rijdt op kop",
+      badgeText: "ROUTESCOUT ▸ VOORUIT GEKEKEN ▸",
       heroH1a: "SCOUT JE ", heroH1hl: "ROUTE", heroH1b: "RIJD GERUST",
       heroLede: "Laad je GPX en zie in enkele seconden élke wegenwerf op je route, het volledige hoogteprofiel met alle klimmen, én de weersvoorspelling met de wind onderweg. Live data uit <strong>GIPOD</strong> en Open-Meteo.",
       heroCta: "Laad je GPX", heroHow: "Hoe werkt het?",
@@ -94,6 +95,7 @@ const I18N = (() => {
       locale: "en-GB",
       navStart: "Start", navGids: "Guide", navCheck: "Go to the check ↓",
       heroKicker: "Your scout rides up the road",
+      badgeText: "ROUTESCOUT ▸ SCOUTED AHEAD ▸",
       heroH1a: "SCOUT THE ", heroH1hl: "ROUTE", heroH1b: "RIDE EASY",
       heroLede: "Load your GPX and see, in seconds, every roadwork on your route, the full elevation profile with all climbs, and the weather forecast with the wind along the way. Live data from <strong>GIPOD</strong> and Open-Meteo.",
       heroCta: "Load your GPX", heroHow: "How does it work?",
