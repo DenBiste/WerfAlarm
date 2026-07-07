@@ -10,7 +10,7 @@
   const $ = id => {
     const el = document.getElementById(id);
     if (el) return el;
-    console.warn(`Route Info: element #${id} ontbreekt — pagina en script zijn mogelijk verschillende versies. Ververs met Ctrl+F5.`);
+    console.warn(`RouteScout: element #${id} ontbreekt — pagina en script zijn mogelijk verschillende versies. Ververs met Ctrl+F5.`);
     const absorb = new Proxy(function () {}, {
       get: (t, p) => (p === Symbol.toPrimitive ? () => "" : absorb),
       set: () => true,
@@ -268,7 +268,7 @@
     const blob = new Blob([out], { type: "application/gpx+xml" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-") + "-route-info.gpx";
+    a.download = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-") + "-routescout.gpx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   });
@@ -489,7 +489,7 @@
 
     return `<!DOCTYPE html><html lang="nl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Route Info-rapport — ${esc(route.name)}</title>
+<title>RouteScout-rapport — ${esc(route.name)}</title>
 <style>
  body{font-family:system-ui,sans-serif;background:#F4F2EC;color:#141619;max-width:820px;margin:0 auto;padding:24px;line-height:1.5}
  .stripes{height:12px;background:repeating-linear-gradient(-45deg,#F4590B 0 16px,#fff 16px 32px);border:2px solid #141619;border-radius:6px}
@@ -510,14 +510,14 @@
  footer{font-size:12px;color:#565E68;margin-top:22px}
 </style></head><body>
 <div class="stripes"></div>
-<h1>ROUTE<span> INFO</span> — rapport</h1>
+<h1>ROUTE<span>SCOUT</span> — rapport</h1>
 <p class="sub"><b>${esc(route.name)}</b> · ${route.km.toFixed(1)} km · ritdatum <b>${dateStr}</b> · zoekafstand ${scope}${view.modes.size !== 3 ? ` · <b>weggebruikers: ${modesLabel(view.modes)}</b>` : ""}${view.onlyHard ? " · <b>filter: enkel blokkades ⛔</b>" : ""} · gemaakt op ${now}</p>
 <div class="box">${mapSvg}</div>
 <div class="box">${stripSvg}</div>
 ${list.length ? rows : `<div class="ok">🎉 <b>${view.onlyHard ? "Geen blokkades!" : "Vrije baan!"}</b> ${view.onlyHard ? "Geen afsluitingen of omleidingen op deze route op " + dateStr + " (lichtere hinder niet berekend)." : "Geen hinder gevonden op deze route op " + dateStr + "."}</div>`}
 ${truncated ? `<p class="sub">⚠ Minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.</p>` : ""}
 <footer>Bron: GIPOD open data (geo.api.vlaanderen.be), dezelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen.
-Gegenereerd met Route Info; de situatie kan wijzigen, controleer kort voor vertrek opnieuw.</footer>
+Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertrek opnieuw.</footer>
 </body></html>`;
   }
 
@@ -889,8 +889,8 @@ Gegenereerd met Route Info; de situatie kan wijzigen, controleer kort voor vertr
     y = 20;
     doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(...INKc);
     doc.text("ROUTE", M, y);
-    doc.setTextColor(...ORANGEc); doc.text(" INFO", M + doc.getTextWidth("ROUTE"), y);
-    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("ROUTE INFO"), y);
+    doc.setTextColor(...ORANGEc); doc.text("SCOUT", M + doc.getTextWidth("ROUTE"), y);
+    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("ROUTESCOUT"), y);
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
     /* ook de infolijnen afbreken op paginabreedte (lange routenamen!) */
@@ -1392,7 +1392,7 @@ Gegenereerd met Route Info; de situatie kan wijzigen, controleer kort voor vertr
     const btn = $("report"), old = btn.textContent;
     btn.disabled = true; btn.textContent = T("pdfBusy");
     const slug = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-").toLowerCase();
-    const base = `route-info-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
+    const base = `routescout-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
     try {
       await loadJsPDF();
       (await buildReportPdf()).save(base + ".pdf");

@@ -1,51 +1,63 @@
 /* =========================================================
-   WERFALARM — hindercheck voor fietsroutes
-   Redesign 2026: tactile signage-brutalism
-   · typografie als architectuur (viewport-geschaalde variabele font)
-   · bento-grid met nette mobiele collapse
-   · harde offset-schaduwen, zichtbare randen, korrel
-   · functionele micro-interacties, scroll-reveals (CSS-only)
-   · dopamine-oranje op krijtwit, AA-contrast, reduced-motion-proof
+   ROUTESCOUT — route-briefing voor fietsers
+   Redesign 2026: "trail & terrain"
+   · cartografische esthetiek: topolijnen, gestippelde trailpaden,
+     waypoint-diamanten, kompas-badge (wayfinding-trend 2026)
+   · natuurpalet met signaalaccent: dennengroen + warm zand +
+     waymark-oranje ("earthy tech", dopamine met mate)
+   · zachte gelaagde diepte i.p.v. louter harde offsets (soft depth)
+   · expressieve variabele typografie, bento-grid, scroll-reveals
+   · matte korrel-textuur, AA-contrast, reduced-motion-proof
    ========================================================= */
 :root{
-  --chalk:#F4F2EC;           /* krijtwit (Cloud Dancer-achtig) */
-  --paper:#FFFFFF;
-  --ink:#141619;             /* asfalt-zwart */
-  --muted:#565E68;
-  --line:#141619;            /* randen = inkt: tactiel, geen grijs */
-  --soft:#E3E1D9;
-  --orange:#F4590B;          /* signalisatie, opgeschroefd */
+  --chalk:#F1EBDD;           /* warm zand */
+  --paper:#FBF8F1;           /* licht perkament */
+  --ink:#17211B;             /* dennen-zwart */
+  --muted:#5A6258;
+  --line:#17211B;
+  --soft:#E2DAC6;
+  --pine:#1E4D3B;            /* verkennersgroen */
+  --moss:#2F6B4F;
+  --orange:#F4590B;          /* waymark-oranje: het spoor dat je volgt */
   --orange-deep:#D9480F;
-  --orange-bg:#FFE8D9;
-  --yellow:#FFD43B;          /* veiligheidsgeel accent */
+  --orange-bg:#FBE3D2;
+  --yellow:#FFD43B;
   --route:#2F5AA8;
   --ok:#2B8A3E;
-  --shadow:6px 6px 0 var(--ink);       /* harde offset-schaduw */
-  --shadow-sm:4px 4px 0 var(--ink);
-  --radius:14px;
+  --shadow:7px 7px 0 rgba(30,77,59,.28), 0 1px 0 var(--ink);   /* zachte pine-offset */
+  --shadow-sm:4px 4px 0 rgba(30,77,59,.26);
+  --radius:16px;
   --font:"Archivo",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;font-family:var(--font);color:var(--ink);background:var(--chalk);line-height:1.55;
-  /* subtiele korrel: tactiel, ~0 bytes extra */
-  background-image:radial-gradient(rgba(20,22,25,.05) 1px, transparent 1px);
-  background-size:5px 5px}
+  /* korrel + heel lichte topografische contourlijnen (cartografie-motief) */
+  background-image:
+    radial-gradient(rgba(23,33,27,.05) 1px, transparent 1px),
+    repeating-radial-gradient(ellipse 900px 520px at 12% -6%, transparent 0 64px, rgba(30,77,59,.055) 64px 66px),
+    repeating-radial-gradient(ellipse 1100px 640px at 108% 42%, transparent 0 80px, rgba(30,77,59,.045) 80px 82px);
+  background-size:5px 5px, auto, auto}
 a{color:inherit}
 ::selection{background:var(--orange);color:#fff}
 :focus-visible{outline:3px solid var(--route);outline-offset:2px}
 
 /* ---------- barrier / nadar-motief ---------- */
-.barrier{height:14px;background:repeating-linear-gradient(-45deg,var(--orange) 0 18px,#fff 18px 36px)}
+.barrier{height:14px;background:
+  repeating-linear-gradient(90deg,var(--orange) 0 26px,transparent 26px 42px) center/100% 4px no-repeat,
+  var(--pine)}
 .barrier.thin{height:8px}
 
 /* =========================== TOPBAR =========================== */
 .topbar{position:sticky;top:0;z-index:1200;display:flex;align-items:center;gap:24px;
-  padding:14px clamp(16px,4vw,44px);background:color-mix(in srgb,var(--chalk) 82%,transparent);
-  backdrop-filter:blur(10px);border-bottom:2px solid var(--ink)}
+  background:var(--pine);color:var(--paper);padding:12px clamp(16px,3vw,36px);border-bottom:2px solid var(--ink);
+  box-shadow:0 2px 0 rgba(23,33,27,.25)}
 .brand{font-weight:800;font-stretch:118%;font-size:21px;letter-spacing:.05em;display:flex;align-items:center;gap:10px;margin-right:auto}
 .brand em{font-style:normal;color:var(--orange)}
-.brand-stripe{width:26px;height:16px;background:repeating-linear-gradient(-45deg,var(--orange) 0 6px,#fff 6px 12px);border:2px solid var(--ink);border-radius:4px}
+.topbar .navlink{color:var(--paper)}
+.brand-stripe{width:22px;height:22px;border:2px solid var(--paper);border-radius:50%;position:relative;flex:0 0 auto;
+  background:conic-gradient(var(--orange) 0 25%, transparent 25% 50%, var(--orange) 50% 75%, transparent 75%)}
+.brand-stripe::after{content:"";position:absolute;inset:6px;background:var(--paper);border-radius:50%}
 .navlink{font-size:14px;font-weight:600;text-decoration:none;padding:6px 2px;border-bottom:2px solid transparent;transition:border-color .15s}
 .navlink:hover{border-color:var(--orange)}
 .navlink-cta{border:2px solid var(--ink);border-radius:99px;padding:6px 16px;background:var(--yellow);box-shadow:3px 3px 0 var(--ink);transition:transform .12s,box-shadow .12s}
@@ -71,7 +83,7 @@ a{color:inherit}
 .hero-note{font-size:13px;color:var(--muted);margin:0;line-height:1.5}
 
 /* =========================== MARQUEE (kinetische typografie) =========================== */
-.marquee{overflow:hidden;background:var(--ink);color:var(--chalk);border-block:2px solid var(--ink);padding:10px 0}
+.marquee{overflow:hidden;background:var(--pine);color:var(--paper);border-block:2px solid var(--ink);padding:10px 0}
 .marquee-track{display:flex;width:max-content;animation:scroll 26s linear infinite}
 .marquee span{font-weight:800;font-stretch:115%;font-size:17px;letter-spacing:.14em;white-space:nowrap;padding-right:1em}
 .marquee span::selection{background:var(--yellow);color:var(--ink)}
@@ -85,7 +97,7 @@ a{color:inherit}
 .bento{display:grid;gap:16px;grid-template-columns:repeat(6,1fr)}
 .cell{background:var(--paper);border:2px solid var(--ink);border-radius:var(--radius);
   padding:22px;box-shadow:var(--shadow);transition:transform .15s,box-shadow .15s}
-.cell:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+.cell:hover{transform:translate(-2px,-2px);box-shadow:10px 10px 0 rgba(30,77,59,.32), 0 1px 0 var(--ink)}
 .cell-step{grid-column:span 2}
 .cell-stat{grid-column:span 2;display:flex;flex-direction:column;justify-content:flex-end;min-height:150px}
 .cell-live{grid-column:span 2;position:relative}
@@ -184,12 +196,13 @@ a{color:inherit}
 
 /* hoofdstukken onder de kaart (spiegel van het PDF-rapport) */
 .chapter{margin-top:26px}
-.chap-banner{display:flex;align-items:center;gap:0;background:var(--ink);border:2px solid var(--ink);
+.chap-banner{display:flex;align-items:center;gap:0;background:var(--pine);border:2px solid var(--ink);
   border-radius:var(--radius) var(--radius) 0 0;overflow:hidden}
 .chap-icon{flex:0 0 auto;width:54px;height:54px;display:grid;place-items:center;font-size:26px;background:var(--orange)}
 .chap-banner h2{margin:0;padding:0 18px;font-weight:900;font-stretch:118%;font-size:clamp(20px,3vw,30px);
   letter-spacing:.02em;color:#fff;text-transform:uppercase}
-.chap-stripe{height:10px;background:repeating-linear-gradient(-45deg,var(--orange) 0 14px,#fff 14px 28px);border-inline:2px solid var(--ink)}
+.chap-stripe{height:10px;border-inline:2px solid var(--ink);background:
+  repeating-linear-gradient(90deg,var(--orange) 0 22px,transparent 22px 36px) center/100% 4px no-repeat,var(--paper)}
 .chap-body{background:var(--paper);border:2px solid var(--ink);border-top:none;
   border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow);padding:18px}
 .profchart-box{border:2px solid var(--ink);border-radius:10px;overflow:hidden;background:var(--chalk)}
@@ -278,3 +291,24 @@ a{color:inherit}
   .strip-tick{transition:none}
   .btn,.card,.cell,.navlink-cta,.bar i{transition:none}
 }
+
+
+/* ---------- RouteScout 2026: trail-accenten ---------- */
+/* gestippeld "spoor" onder het accentwoord, met waypoint-diamant */
+.mega .hl{position:relative;color:var(--orange)}
+.mega .hl::after{content:"";position:absolute;left:2%;right:2%;bottom:.02em;height:.09em;
+  background:repeating-linear-gradient(90deg,var(--pine) 0 .5em,transparent .5em .85em)}
+/* draaiende kompas-badge (sticker/badge-trend), CSS/SVG-only */
+.scout-badge{position:relative;flex:0 0 auto;width:clamp(96px,11vw,150px);aspect-ratio:1;align-self:center}
+.scout-badge svg{width:100%;height:100%;animation:spin 26s linear infinite}
+.scout-badge .needle{position:absolute;inset:0;display:grid;place-items:center;font-size:clamp(30px,4vw,48px)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.scout-badge svg{animation:none}}
+/* sectietitels krijgen een klein trail-ornament */
+.section-title::after{content:"";display:block;width:120px;height:4px;margin-top:10px;
+  background:repeating-linear-gradient(90deg,var(--orange) 0 14px,transparent 14px 24px)}
+/* knoppen: pine als donkere variant */
+.btn-dark{background:var(--pine)}
+.btn-dark:hover:not(:disabled){background:var(--moss)}
+/* layer-balk en strip op perkament */
+.layers{background:var(--paper)}

@@ -16,12 +16,12 @@ const I18N = (() => {
       locale: "nl-BE",
       /* ---------- topbar / hero / bento (index) ---------- */
       navStart: "Start", navGids: "Gids", navCheck: "Naar de check ↓",
-      heroKicker: "Voor wie zijn eigen routes tekent",
-      heroH1a: "VRIJE ", heroH1hl: "BAAN", heroH1b: "EN GAAN",
+      heroKicker: "Jouw verkenner rijdt op kop",
+      heroH1a: "SCOUT JE ", heroH1hl: "ROUTE", heroH1b: "RIJD GERUST",
       heroLede: "Laad je GPX en zie in enkele seconden élke wegenwerf op je route, het volledige hoogteprofiel met alle klimmen, én de weersvoorspelling met de wind onderweg. Live data uit <strong>GIPOD</strong> en Open-Meteo.",
       heroCta: "Laad je GPX", heroHow: "Hoe werkt het?",
       heroNote: "Komoot · Strava · Garmin · RideWithGPS<br>Gratis, zonder account · NL/EN",
-      marquee: "CHECK JE GPX ▸ ELKE WERF OP JE ROUTE ▸ KLIMMEN & HOOGTEPROFIEL ▸ WEER & WIND ▸ HEEL VLAANDEREN ▸ VRIJE BAAN ▸ ",
+      marquee: "VERKEN JE ROUTE ▸ ELKE WERF ▸ ELKE KLIM ▸ WEER & WIND ▸ HEEL VLAANDEREN ▸ SCOUTED. ▸ ",
       bentoTitle: "Van GPX naar gerust vertrekken",
       s1t: "Laad je route", s1p: "Sleep je GPX op de kaart of kies hem via de knop. Tracks van elke app of fietscomputer werken meteen.",
       s2t: "Kies datum, marge & lagen", s2p: "Wanneer rij je, hoe ver naast je track wil je kijken, en welke lagen wil je zien: blokkades, hoogteprofiel, weer? Combineer vrij.",
@@ -81,18 +81,18 @@ const I18N = (() => {
       weerNoData: "De weersvoorspelling kon niet opgehaald worden. Raadpleeg je weerapp voor vertrek.",
       windHeader: "De wind onderweg",
       /* ---------- footer ---------- */
-      footTag: "route-briefing voor fietsers",
+      footTag: "jouw verkenner op kop — werven, klimmen & weer",
       footSrc: `Bron: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (werven, enkel Vlaanderen) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (hoogte &amp; weer). Kaart © OpenStreetMap.`
     },
     en: {
       locale: "en-GB",
       navStart: "Start", navGids: "Guide", navCheck: "Go to the check ↓",
-      heroKicker: "For riders who draw their own routes",
-      heroH1a: "CLEAR ", heroH1hl: "ROADS", heroH1b: "AHEAD",
+      heroKicker: "Your scout rides up the road",
+      heroH1a: "SCOUT THE ", heroH1hl: "ROUTE", heroH1b: "RIDE EASY",
       heroLede: "Load your GPX and see, in seconds, every roadwork on your route, the full elevation profile with all climbs, and the weather forecast with the wind along the way. Live data from <strong>GIPOD</strong> and Open-Meteo.",
       heroCta: "Load your GPX", heroHow: "How does it work?",
       heroNote: "Komoot · Strava · Garmin · RideWithGPS<br>Free, no account · NL/EN",
-      marquee: "CHECK YOUR GPX ▸ EVERY ROADWORK ON YOUR ROUTE ▸ CLIMBS & ELEVATION ▸ WEATHER & WIND ▸ ALL OF FLANDERS ▸ CLEAR ROADS ▸ ",
+      marquee: "SCOUT YOUR ROUTE ▸ EVERY ROADWORK ▸ EVERY CLIMB ▸ WEATHER & WIND ▸ ALL OF FLANDERS ▸ SCOUTED. ▸ ",
       bentoTitle: "From GPX to a worry-free start",
       s1t: "Load your route", s1p: "Drag your GPX onto the map or pick it via the button. Tracks from any app or bike computer work instantly.",
       s2t: "Pick date, margin & layers", s2p: "When do you ride, how far beside your track should we look, and which layers do you want: blockages, elevation, weather? Combine freely.",
@@ -147,7 +147,7 @@ const I18N = (() => {
       windArrowTip: (v, dir) => `Wind: ${v} km/h from ${dir}`,
       weerNoData: "The weather forecast could not be retrieved. Check your weather app before departure.",
       windHeader: "The wind along the way",
-      footTag: "route briefing for cyclists",
+      footTag: "your scout up the road — roadworks, climbs & weather",
       footSrc: `Source: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (roadworks, Flanders only) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (elevation &amp; weather). Map © OpenStreetMap.`
     }
   };
