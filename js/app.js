@@ -27,8 +27,8 @@
     return typeof v === "function" ? v(...a) : (v ?? "");
   };
   const uiLoc = () => (window.I18N ? I18N.ui().locale : "nl-BE");
-  const modesLabelL = (modes, L) => modes.size === 3 ? L.allUsers
-    : ["bike", "ped", "motor"].filter(m => modes.has(m)).map(m => L.modes[m]).join(" + ");
+  const modesLabelL = (modes, dict) => modes.size === 3 ? dict.allUsers
+    : ["bike", "ped", "motor"].filter(m => modes.has(m)).map(m => dict.modes[m]).join(" + ");
 
   /* ---------------- state ---------------- */
   let route = null;       // gebouwd door Geom.buildRoute()
@@ -541,7 +541,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
   /* Echte kaartafbeelding voor het rapport: OSM-tegels + route + markers op een
      canvas. Faalt dit (offline, geblokkeerde tegels), dan valt het rapport
      terug op het schematische kaartje. */
-  async function buildMapImage(list, L) {
+  async function buildMapImage(list, RL) {
     const S = 2, cw = 780, ch = 360;                       // 780×360 ≙ 182×84 mm in het rapport
     const canvas = document.createElement("canvas");
     canvas.width = cw * S; canvas.height = ch * S;
@@ -600,7 +600,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     }
     /* verplichte bronvermelding */
     ctx.font = "10px Arial"; ctx.textAlign = "right";
-    const at = L.osmAttr;
+    const at = RL.osmAttr;
     const aw = ctx.measureText(at).width + 8;
     ctx.fillStyle = "rgba(255,255,255,.82)"; ctx.fillRect(cw - aw - 4, ch - 16, aw, 13);
     ctx.fillStyle = "#333"; ctx.fillText(at, cw - 8, ch - 6);
@@ -757,7 +757,12 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     }
   };
   const repLang = () => REPL[(window.I18N && I18N.lang === "en") ? "en" : "nl"];
-  const compassL = (deg, L) => L.compass[Math.round(deg / 22.5) % 16];
+  /* FIX 4: WMO-weercode -> icoon; emoji sluit aan bij de bestaande
+     emoji-iconografie van de site (lagen, hoofdstukken) en werkt offline. */
+  const wmoIcon = c => c === 0 ? "☀️" : c <= 2 ? "🌤️" : c === 3 ? "☁️"
+    : c <= 48 ? "🌫️" : c <= 57 ? "🌦️" : c <= 67 ? "🌧️" : c <= 77 ? "❄️"
+    : c <= 82 ? "🌦️" : c <= 86 ? "🌨️" : "⛈️";
+  const compassL = (deg, RL) => RL.compass[Math.round(deg / 22.5) % 16];
 
   /* Dagvoorspelling van Open-Meteo voor het middelpunt van de route.
      We tonen de voorspelling voor de ritdatum als die binnen het
@@ -819,42 +824,42 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
   }
 
   /* Verhaal over de wind onderweg, in de gekozen rapporttaal. */
-  function windStory(w, L) {
-    if (w.wind < 12) return L.calm(Math.round(w.wind));
+  function windStory(w, RL) {
+    if (w.wind < 12) return RL.calm(Math.round(w.wind));
     const legs = windLegs(w.dir);
     const tot = { tegen: 0, mee: 0, zij: 0 };
     legs.forEach(l => tot[l.c] += l.to - l.from);
     const seg = legs.slice(0, 6).map((l, i) => {
-      const range = l.from < 0.5 ? L.rStart(l.to.toFixed(0))
-        : l.to > route.km - 0.7 ? L.rEnd(l.from.toFixed(0))
-        : L.rMid(l.from.toFixed(0), l.to.toFixed(0));
-      return `${range} ${L.verbs[l.c][i % 3]}`;
+      const range = l.from < 0.5 ? RL.rStart(l.to.toFixed(0))
+        : l.to > route.km - 0.7 ? RL.rEnd(l.from.toFixed(0))
+        : RL.rMid(l.from.toFixed(0), l.to.toFixed(0));
+      return `${range} ${RL.verbs[l.c][i % 3]}`;
     }).join("; ");
-    const extra = legs.length > 6 ? L.moreLegs : "";
-    const som = L.windTotals(Math.round(tot.tegen), Math.round(tot.mee), Math.round(tot.zij));
-    const finale = legs.length && legs[legs.length - 1].c === "mee" ? L.finMee
-      : legs.length && legs[legs.length - 1].c === "tegen" ? L.finTegen : "";
-    return `${L.windFrom(compassL(w.dir, L), Math.round(w.wind))}${seg}${extra}. ${som}${finale}`;
+    const extra = legs.length > 6 ? RL.moreLegs : "";
+    const som = RL.windTotals(Math.round(tot.tegen), Math.round(tot.mee), Math.round(tot.zij));
+    const finale = legs.length && legs[legs.length - 1].c === "mee" ? RL.finMee
+      : legs.length && legs[legs.length - 1].c === "tegen" ? RL.finTegen : "";
+    return `${RL.windFrom(compassL(w.dir, RL), Math.round(w.wind))}${seg}${extra}. ${som}${finale}`;
   }
 
   /* Gevarieerd karakterportret van een klim, in de gekozen rapporttaal. */
-  function climbStory(c, i, climbs, L) {
+  function climbStory(c, i, climbs, RL) {
     const pick = (arr, seed) => arr[seed % arr.length];
     const s = i;
     const pos = c.startKm < route.km * .3 ? "vroeg" : c.startKm > route.km * .7 ? "finale" : "mid";
-    const open = pick(L.cOpen[pos], s);
+    const open = pick(RL.cOpen[pos], s);
     const band = c.avg < 3.5 ? 0 : c.avg < 6 ? 1 : c.avg < 9 ? 2 : 3;
-    const karakter = pick(L.cChar[band], s);
-    const ritme = c.irregular ? pick(L.cRitme, s) : "";
-    const piek = c.max >= c.avg + 2 ? pick(L.cPiek(c.max.toFixed(0), c.maxAt.toFixed(1)), s) : "";
-    const lente = c.lenKm >= 3 ? L.cLong : c.lenKm <= 0.6 ? L.cShort : "";
+    const karakter = pick(RL.cChar[band], s);
+    const ritme = c.irregular ? pick(RL.cRitme, s) : "";
+    const piek = c.max >= c.avg + 2 ? pick(RL.cPiek(c.max.toFixed(0), c.maxAt.toFixed(1)), s) : "";
+    const lente = c.lenKm >= 3 ? RL.cLong : c.lenKm <= 0.6 ? RL.cShort : "";
     let context = "";
     const score = x => x.gain * x.avg;
-    if (climbs.length > 1 && score(c) === Math.max(...climbs.map(score))) context += L.cHardest;
+    if (climbs.length > 1 && score(c) === Math.max(...climbs.map(score))) context += RL.cHardest;
     if (climbs.length > 1 && c.lenKm === Math.max(...climbs.map(x => x.lenKm)) && c.lenKm >= 1.5 && score(c) !== Math.max(...climbs.map(score)))
-      context += L.cLongest;
-    if (i > 0 && c.startKm - climbs[i - 1].endKm < 3) context += L.cBackToBack;
-    const slot = pick(L.cSlot(c.topEle), s + 1);
+      context += RL.cLongest;
+    if (i > 0 && c.startKm - climbs[i - 1].endKm < 3) context += RL.cBackToBack;
+    const slot = pick(RL.cSlot(c.topEle), s + 1);
     return `${open} ${karakter}${ritme}${piek}${lente}${context} ${slot}`.replace(/\s+/g, " ").trim();
   }
 
@@ -863,44 +868,49 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const { list, rideDate, range, truncated } = view;
     const W = 210, M = 14, CW = W - 2 * M;
-    const INKc = [20, 22, 25], ORANGEc = [244, 89, 11], DEEPc = [217, 72, 15], HARDc = [166, 30, 4],
-          MUTEDc = [86, 94, 104], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [237, 236, 229];
-    const L = repLang();
-    const dateStr = rideDate.toLocaleDateString(L.locale);
+    /* FIX 2: kleuren = websitepalet (css :root, "trail & terrain") */
+    const INKc = [23, 33, 27], ORANGEc = [244, 89, 11], DEEPc = [217, 72, 15], HARDc = [166, 30, 4],
+          MUTEDc = [90, 98, 88], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [234, 227, 212],
+          PINEc = [30, 77, 59], SANDc = [241, 235, 221], PAPERc = [251, 248, 241];
+    const RL = repLang();
+    const dateStr = rideDate.toLocaleDateString(RL.locale);
     let y;
     let mapImg = null, profile = null, weather = null;
-    try { mapImg = await buildMapImage(list, L); } catch (e) { /* schematisch kaartje als vangnet */ }
+    try { mapImg = await buildMapImage(list, RL); } catch (e) { /* schematisch kaartje als vangnet */ }
     try { profile = await ensureProfile(); } catch (e) { profile = null; }
     try { weather = await fetchWeather(view.rideDate); } catch (e) { weather = null; }
 
+    const paintPage = () => { doc.setFillColor(...SANDc); doc.rect(0, 0, W, 297, "F"); };
+    /* koptekstbalk = dennengroen met gestippeld waymark-spoor (zoals de site) */
     const stripes = yy => {
-      doc.setFillColor(...ORANGEc); doc.rect(0, yy, W, 7, "F");
-      doc.setDrawColor(255); doc.setLineWidth(2.4);
-      for (let x = -8; x < W + 8; x += 7) doc.line(x, yy + 7, x + 7, yy);
+      doc.setFillColor(...PINEc); doc.rect(0, yy, W, 8, "F");
+      doc.setFillColor(...ORANGEc);
+      for (let x = 8; x < W - 6; x += 13) doc.rect(x, yy + 3.1, 7, 1.8, "F");
     };
     const diamond = (cx, cy, r, fill) => {
       doc.setFillColor(...fill); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
       doc.lines([[r, r], [-r, r], [-r, -r], [r, -r]], cx, cy - r, [1, 1], "FD", true);
     };
-    const newPage = () => { doc.addPage(); y = 18; };
+    const newPage = () => { doc.addPage(); paintPage(); y = 18; };
 
     /* ---- kop ---- */
+    paintPage();
     stripes(0);
     y = 20;
     doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(...INKc);
     doc.text("ROUTE", M, y);
     doc.setTextColor(...ORANGEc); doc.text("SCOUT", M + doc.getTextWidth("ROUTE"), y);
-    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("ROUTESCOUT"), y);
+    doc.setTextColor(...INKc); doc.text(RL.rapport, M + doc.getTextWidth("ROUTESCOUT"), y);
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
     /* ook de infolijnen afbreken op paginabreedte (lange routenamen!) */
-    const info1 = doc.splitTextToSize(san(L.info1(route.name, route.km.toFixed(1), dateStr)), CW);
+    const info1 = doc.splitTextToSize(san(RL.info1(route.name, route.km.toFixed(1), dateStr)), CW);
     doc.text(info1, M, y); y += info1.length * 4.5;
-    const opts = [L.searchDist(range)];
-    const usersTxt = view.modes.size === 3 ? L.allUsers : ["bike", "ped", "motor"].filter(m => view.modes.has(m)).map(m => L.modes[m]).join(" + ");
-    if (view.modes.size !== 3) opts.push(L.usersLbl(usersTxt));
-    if (view.onlyHard) opts.push(L.filterHardTxt);
-    opts.push(L.madeOn(new Date().toLocaleString(L.locale, { dateStyle: "short", timeStyle: "short" }).replace(/ /g, "\u00A0")));
+    const opts = [RL.searchDist(range)];
+    const usersTxt = view.modes.size === 3 ? RL.allUsers : ["bike", "ped", "motor"].filter(m => view.modes.has(m)).map(m => RL.modes[m]).join(" + ");
+    if (view.modes.size !== 3) opts.push(RL.usersLbl(usersTxt));
+    if (view.onlyHard) opts.push(RL.filterHardTxt);
+    opts.push(RL.madeOn(new Date().toLocaleString(RL.locale, { dateStyle: "short", timeStyle: "short" }).replace(/ /g, "\u00A0")));
     const info2 = doc.splitTextToSize(san(opts.join(" · ")), CW);
     doc.text(info2, M, y); y += info2.length * 4.5 + 1.5;
 
@@ -936,8 +946,8 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     y += mapH + 6;
 
     /* ---- routestrook ---- */
-    doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
-    doc.rect(M, y, CW, 14, "FD");
+    doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
+    doc.roundedRect(M, y, CW, 14, 3, 3, "FD");
     const sy = y + 6, sx0 = M + 8, sx1 = M + CW - 8;
     doc.setDrawColor(...INKc); doc.setLineWidth(1.1); doc.line(sx0, sy, sx1, sy);
     doc.setFillColor(...OKc); doc.setLineWidth(.4); doc.circle(sx0, sy, 1.7, "FD");
@@ -952,9 +962,9 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     if (!list.length) {
       doc.setDrawColor(...INKc); doc.setLineWidth(.5); doc.rect(M, y, CW, 18, "D");
       doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...OKc);
-      doc.text(view.onlyHard ? L.noBlocksTitle : L.freeTitle, W / 2, y + 8, { align: "center" });
+      doc.text(view.onlyHard ? RL.noBlocksTitle : RL.freeTitle, W / 2, y + 8, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      doc.text(san(view.onlyHard ? L.noBlocksBody(dateStr) : L.freeBody(dateStr)), W / 2, y + 13.5, { align: "center" });
+      doc.text(san(view.onlyHard ? RL.noBlocksBody(dateStr) : RL.freeBody(dateStr)), W / 2, y + 13.5, { align: "center" });
       y += 24;
     }
     const tX = M + 27, tW = W - M - tX - 3;   // 3 mm binnenmarge rechts
@@ -963,25 +973,25 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       /* Belangrijk: splitTextToSize meet met het ACTIEVE font — dus vóór elke
          meting exact het font/formaat instellen waarmee de tekst ook wordt afgedrukt. */
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
-      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  " + L.blockTag : ""), tW);
+      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  " + RL.blockTag : ""), tW);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? L.fromTrack(r.dist) : L.onTrack}`);
+      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? RL.fromTrack(r.dist) : RL.onTrack}`);
       const metaLines = doc.splitTextToSize(meta, tW);
       const consLines = consText(r) ? doc.splitTextToSize(san(consText(r)), tW) : [];
       doc.setFont("helvetica", "bold");
       const passLines = r.kms.length > 1
-        ? doc.splitTextToSize(san(L.passages(r.kms.map(k => k.toFixed(1)).join(" · "))), tW) : [];
+        ? doc.splitTextToSize(san(RL.passages(r.kms.map(k => k.toFixed(1)).join(" · "))), tW) : [];
       const h = 8 + titleLines.length * 4.6 + metaLines.length * 3.9 + passLines.length * 3.9 + consLines.length * 3.9 + 4.5;
       if (y + h > 282) newPage();
 
-      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
-      doc.rect(M, y, CW, h, "FD");
-      doc.setFillColor(...(hard ? HARDc : DEEPc)); doc.rect(M, y, 2.4, h, "F");
+      doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.roundedRect(M, y, CW, h, 3, 3, "FD");
+      doc.setFillColor(...(hard ? HARDc : DEEPc)); doc.rect(M + .4, y + .4, 2.4, h - .8, "F");
       /* km-badge */
-      doc.setDrawColor(...INKc); doc.setFillColor(255, 255, 255); doc.rect(M + 6, y + 4, 17, 11, "FD");
-      doc.setFillColor(...INKc); doc.rect(M + 6, y + 4, 17, 4, "F");
+      doc.setDrawColor(...INKc); doc.setFillColor(...PAPERc); doc.rect(M + 6, y + 4, 17, 11, "FD");
+      doc.setFillColor(...PINEc); doc.rect(M + 6, y + 4, 17, 4, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(255, 212, 59);
-      doc.text(r.kms.length > 1 ? L.kmMulti(r.kms.length) : L.kmLbl, M + 14.5, y + 6.9, { align: "center" });
+      doc.text(r.kms.length > 1 ? RL.kmMulti(r.kms.length) : RL.kmLbl, M + 14.5, y + 6.9, { align: "center" });
       doc.setFontSize(10); doc.setTextColor(...INKc);
       doc.text(r.km.toFixed(1), M + 14.5, y + 12.6, { align: "center" });
 
@@ -997,13 +1007,13 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       }
       if (consLines.length) { doc.setTextColor(...(hard ? HARDc : DEEPc)); doc.text(consLines, tX, ty); ty += consLines.length * 3.9; }
       doc.setTextColor(...ROUTEc); doc.setFontSize(8);
-      doc.textWithLink(L.viewMap, tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
+      doc.textWithLink(RL.viewMap, tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
       y += h + 4;
     }
     if (truncated) {
       if (y > 275) newPage();
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...MUTEDc);
-      doc.text(san(L.truncNote), M, y + 2);
+      doc.text(san(RL.truncNote), M, y + 2);
       y += 7;
     }
 
@@ -1031,17 +1041,17 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const chapter = (title, icon) => {
       if (y > 236) newPage();
       y += 4;
-      doc.setFillColor(...INKc); doc.rect(M, y, CW, 14, "F");
+      doc.setFillColor(...PINEc); doc.rect(M, y, CW, 14, "F");
       doc.setFillColor(...ORANGEc); doc.rect(M, y, 14, 14, "F");
       icon(M + 7, y + 7);
       doc.setFont("helvetica", "bold"); doc.setFontSize(15); doc.setTextColor(255, 255, 255);
       doc.text(title, M + 19, y + 9.6);
       y += 14;
-      /* nadar-streepje onder de balk */
-      doc.setFillColor(...ORANGEc); doc.rect(M, y, CW, 2, "F");
-      doc.setDrawColor(255); doc.setLineWidth(.8);
-      for (let x = M + 2; x < M + CW - 2; x += 6) doc.line(x, y + 2, x + 2.4, y);
-      y += 9;
+      /* gestippeld trailspoor onder de balk (websitemotief) */
+      doc.setFillColor(...PAPERc); doc.rect(M, y, CW, 2.6, "F");
+      doc.setFillColor(...ORANGEc);
+      for (let x = M + 3; x < M + CW - 8; x += 12) doc.rect(x, y + .6, 6.5, 1.4, "F");
+      y += 10;
     };
     const fillPoly = (pts, fill) => {
       if (pts.length < 3) return;
@@ -1089,41 +1099,41 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       doc.text(`${e0} m`, x + w + 1.5, sy(e0) + 1, { align: "left" });
     };
 
-    chapter(L.secClimbs, mountainIcon);
+    chapter(RL.secClimbs, mountainIcon);
     if (!profile) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const noEle = doc.splitTextToSize(san(L.noEle), CW);
+      const noEle = doc.splitTextToSize(san(RL.noEle), CW);
       doc.text(noEle, M, y); y += noEle.length * 4 + 4;
     } else {
       const climbs = Geom.findClimbs(profile);
       /* overzichtsgrafiek van de volledige rit */
       if (y + 46 > 282) newPage();
-      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
-      doc.rect(M, y, CW, 40, "FD");
+      doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.roundedRect(M, y, CW, 40, 3, 3, "FD");
       drawProfileChart(M + 3, y + 2, CW - 14, 34, profile, climbs, ROUTEc, [222, 228, 238]);
       y += 44;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...INKc);
-      const stats = san(L.profStats(profile.ascent, route.km.toFixed(1), profile.min, profile.max, climbs.length));
+      const stats = san(RL.profStats(profile.ascent, route.km.toFixed(1), profile.min, profile.max, climbs.length));
       const statsLines = doc.splitTextToSize(stats, CW);
       doc.text(statsLines, M, y); y += statsLines.length * 4 + 3;
 
       if (!climbs.length) {
         doc.setTextColor(...MUTEDc);
-        const flat = doc.splitTextToSize(san(L.flat), CW);
+        const flat = doc.splitTextToSize(san(RL.flat), CW);
         doc.text(flat, M, y); y += flat.length * 4 + 4;
       }
       /* per klim: minigrafiek + portret */
       climbs.forEach((c, i) => {
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-        const titleTxt = san(L.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1)));
+        const titleTxt = san(RL.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1)));
         doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-        const statTxt = san(L.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max));
-        const story = doc.splitTextToSize(san(climbStory(c, i, climbs, L)), CW - 62);
+        const statTxt = san(RL.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max));
+        const story = doc.splitTextToSize(san(climbStory(c, i, climbs, RL)), CW - 62);
         const h = Math.max(26, 14 + story.length * 3.9 + 3);
         if (y + h > 282) newPage();
-        doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
-        doc.rect(M, y, CW, h, "FD");
-        doc.setFillColor(...DEEPc); doc.rect(M, y, 2.4, h, "F");
+        doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+        doc.roundedRect(M, y, CW, h, 3, 3, "FD");
+        doc.setFillColor(...DEEPc); doc.rect(M + .4, y + .4, 2.4, h - .8, "F");
         /* minigrafiek links */
         doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
         doc.rect(M + 5, y + 4, 48, h - 8, "FD");
@@ -1141,38 +1151,38 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     }
 
     /* ================= SECTIE: WEERSVOORSPELLING ================= */
-    chapter(L.secWeather, weatherIcon);
+    chapter(RL.secWeather, weatherIcon);
     if (!weather) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const noW = doc.splitTextToSize(san(L.noWeather), CW);
+      const noW = doc.splitTextToSize(san(RL.noWeather), CW);
       doc.text(noW, M, y); y += noW.length * 4 + 4;
     } else {
       if (y + 34 > 282) newPage();
-      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
-      doc.rect(M, y, CW, 30, "FD");
-      const wd = weather.date.toLocaleDateString(L.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.roundedRect(M, y, CW, 30, 3, 3, "FD");
+      const wd = weather.date.toLocaleDateString(RL.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
-      doc.text(san(L.forecastFor(wd, weather.isRideDate, L.wmo(weather.code))), M + 5, y + 7);
+      doc.text(san(RL.forecastFor(wd, weather.isRideDate, RL.wmo(weather.code))), M + 5, y + 7);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
       const col1 = [
-        L.wTemp(Math.round(weather.tmin), Math.round(weather.tmax)),
-        L.wPrecip(weather.pp ?? "?", (weather.psum ?? 0).toFixed(1))
+        RL.wTemp(Math.round(weather.tmin), Math.round(weather.tmax)),
+        RL.wPrecip(weather.pp ?? "?", (weather.psum ?? 0).toFixed(1))
       ];
       const col2 = [
-        L.wWind(Math.round(weather.wind), compassL(weather.dir, L), Math.round(weather.gust)),
-        L.wCloud(Math.round(weather.cloud))
+        RL.wWind(Math.round(weather.wind), compassL(weather.dir, RL), Math.round(weather.gust)),
+        RL.wCloud(Math.round(weather.cloud))
       ];
       doc.text(san(col1[0]), M + 5, y + 14); doc.text(san(col1[1]), M + 5, y + 19.5);
       doc.text(san(col2[0]), M + 92, y + 14); doc.text(san(col2[1]), M + 92, y + 19.5);
       doc.setFontSize(7.5);
-      doc.text(san(L.wSrc(new Date().toLocaleString(L.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 26);
+      doc.text(san(RL.wSrc(new Date().toLocaleString(RL.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 26);
       y += 34;
       /* de wind onderweg: waar tegen, waar mee, waar dwars */
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
-      doc.text(L.windHeader, M, y); y += 4.5;
+      doc.text(RL.windHeader, M, y); y += 4.5;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const regenAdvies = (weather.pp ?? 0) >= 60 ? L.rain60 : (weather.pp ?? 0) >= 30 ? L.rain30 : "";
-      const adv = doc.splitTextToSize(san(windStory(weather, L) + regenAdvies), CW);
+      const regenAdvies = (weather.pp ?? 0) >= 60 ? RL.rain60 : (weather.pp ?? 0) >= 30 ? RL.rain30 : "";
+      const adv = doc.splitTextToSize(san(windStory(weather, RL) + regenAdvies), CW);
       const advH = adv.length * 4;
       if (y + advH > 284) newPage();
       doc.text(adv, M, y); y += advH + 3;
@@ -1182,7 +1192,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const pages = doc.getNumberOfPages();
     doc.setFont("helvetica", "normal"); doc.setFontSize(7);
     doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-    const foot = doc.splitTextToSize(san(L.footer), CW - 12);
+    const foot = doc.splitTextToSize(san(RL.footer), CW - 12);
     for (let p = 1; p <= pages; p++) {
       doc.setPage(p);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...MUTEDc);
@@ -1284,7 +1294,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const sec = document.getElementById("secProfile");
     if (!sec || !route) return;
     if (pageProf === null) { try { pageProf = await ensureProfile(); } catch (e) { pageProf = null; } }
-    const L = repLang();
+    const RL = repLang();
     const body = document.getElementById("climbCards");
     if (!pageProf) {
       pageClimbs = [];
@@ -1294,10 +1304,10 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     pageClimbs = Geom.findClimbs(pageProf);
     drawProfCanvas(document.getElementById("profChart"), pageProf, pageClimbs);
     document.getElementById("profStats").textContent =
-      san(L.profStats(pageProf.ascent, route.km.toFixed(1), pageProf.min, pageProf.max, pageClimbs.length));
+      san(RL.profStats(pageProf.ascent, route.km.toFixed(1), pageProf.min, pageProf.max, pageClimbs.length));
     body.innerHTML = "";
     if (!pageClimbs.length) {
-      body.innerHTML = `<p class="note">${esc(san(L.flat))}</p>`;
+      body.innerHTML = `<p class="note">${esc(san(RL.flat))}</p>`;
     }
     pageClimbs.forEach((c, i) => {
       const card = document.createElement("div");
@@ -1306,9 +1316,9 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
         `<div class="climb-mini"><canvas width="240" height="150"></canvas></div>
          <div class="km"><b>${i + 1}</b><span>${c.endKm.toFixed(1)}</span></div>
          <div class="body">
-           <h3>${esc(san(L.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1))))}</h3>
-           <div class="meta"><b>${esc(san(L.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max)))}</b></div>
-           <div class="cons" style="margin-top:6px;color:var(--muted)">${esc(san(climbStory(c, i, pageClimbs, L)))}</div>
+           <h3>${esc(san(RL.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1))))}</h3>
+           <div class="meta"><b>${esc(san(RL.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max)))}</b></div>
+           <div class="cons" style="margin-top:6px;color:var(--muted)">${esc(san(climbStory(c, i, pageClimbs, RL)))}</div>
          </div>`;
       body.appendChild(card);
       drawProfCanvas(card.querySelector("canvas"),
@@ -1327,7 +1337,10 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
   function syncWindArrows() {
     windLayer.clearLayers();
     if (!pageWeather || !route) return;
-    const L = repLang();
+    /* FIX 3: `const L = repLang()` overschaduwde Leaflets globale `L`,
+       waardoor L.marker() op het vertaalwoordenboek crashte en er nooit
+       windpijlen verschenen. Lokale naam is nu RL. */
+    const RL = repLang();
     const n = Math.max(4, Math.min(14, Math.round(route.km / 9)));
     const rot = ((pageWeather.dir + 180) - 90);   // ➤ wijst standaard naar rechts (oost)
     for (let i = 1; i <= n; i++) {
@@ -1336,7 +1349,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
         icon: L.divIcon({ className: "", html: `<span class="wind-arrow" style="display:inline-block;transform:rotate(${rot}deg)">➤</span>`, iconSize: [24, 24], iconAnchor: [12, 12] }),
         interactive: true, keyboard: false
       }).addTo(windLayer)
-        .bindTooltip(T("windArrowTip", Math.round(pageWeather.wind), compassL(pageWeather.dir, L)));
+        .bindTooltip(T("windArrowTip", Math.round(pageWeather.wind), compassL(pageWeather.dir, RL)));
     }
   }
 
@@ -1347,7 +1360,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     renderWeatherHtml();
   }
   function renderWeatherHtml() {
-    const L = repLang(), body = document.getElementById("weatherBody");
+    const RL = repLang(), body = document.getElementById("weatherBody");
     if (!body || !route) return;
     if (!pageWeather) {
       body.innerHTML = `<p class="note">${esc(T("weerNoData"))}</p>`;
@@ -1357,14 +1370,14 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const wd = w.date.toLocaleDateString(uiLoc(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     body.innerHTML =
       `<div class="weather-card">
-         <h3>${esc(san(L.forecastFor(wd, w.isRideDate, L.wmo(w.code))))}</h3>
-         <p>${esc(san(L.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
-         <p>${esc(san(L.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
-         <p>${esc(san(L.wWind(Math.round(w.wind), compassL(w.dir, L), Math.round(w.gust))))}</p>
-         <p>${esc(san(L.wCloud(Math.round(w.cloud))))}</p>
+         <h3>${esc(san(RL.forecastFor(wd, w.isRideDate, RL.wmo(w.code))))}</h3>
+         <p>${esc(san(RL.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
+         <p>${esc(san(RL.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
+         <p>${esc(san(RL.wWind(Math.round(w.wind), compassL(w.dir, RL), Math.round(w.gust))))}</p>
+         <p>${esc(san(RL.wCloud(Math.round(w.cloud))))}</p>
        </div>
-       <p class="wind-par"><b>${esc(T("windHeader"))}</b>${esc(san(windStory(w, L)))}</p>
-       <p class="weather-src">${esc(san(L.wSrc(new Date().toLocaleString(uiLoc(), { dateStyle: "short", timeStyle: "short" }))))}</p>`;
+       <p class="wind-par"><b>${esc(T("windHeader"))}</b>${esc(san(windStory(w, RL)))}</p>
+       <p class="weather-src">${esc(san(RL.wSrc(new Date().toLocaleString(uiLoc(), { dateStyle: "short", timeStyle: "short" }))))}</p>`;
     syncWindArrows();
     applyLayers();
   }

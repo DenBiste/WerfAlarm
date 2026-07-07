@@ -312,3 +312,8 @@ a{color:inherit}
 .btn-dark:hover:not(:disabled){background:var(--moss)}
 /* layer-balk en strip op perkament */
 .layers{background:var(--paper)}
+
+/* FIX 4: weericonen */
+.weather-head{grid-column:1/-1;display:flex;align-items:center;gap:14px}
+.weather-ico{font-size:44px;line-height:1;filter:drop-shadow(2px 2px 0 rgba(30,77,59,.25))}
+.weather-card .w-ico{display:inline-block;width:1.6em;font-size:17px}

@@ -8,7 +8,13 @@
    ========================================================= */
 "use strict";
 const I18N = (() => {
+  /* FIX 5: taalkeuze overleeft paginawissels (index ⇄ gids) via localStorage;
+     try/catch zodat file://-restricties gracieus degraderen naar sessie-gedrag */
   let lang = "nl";
+  try {
+    const saved = localStorage.getItem("routescout-lang");
+    if (saved === "en" || saved === "nl") lang = saved;
+  } catch (e) { /* opslag niet beschikbaar: geen persistentie, wel werkend */ }
   const listeners = [];
 
   const D = {
@@ -174,6 +180,7 @@ const I18N = (() => {
   function set(l) {
     if (l !== "nl" && l !== "en") return;
     lang = l;
+    try { localStorage.setItem("routescout-lang", l); } catch (e) { /* zie boven */ }
     apply();
     listeners.forEach(f => { try { f(l); } catch (e) { console.warn(e); } });
   }
@@ -187,3 +194,6 @@ const I18N = (() => {
   return { apply, set, onChange: f => listeners.push(f), ui: () => D[lang],
            extend: (l, obj) => Object.assign(D[l], obj), get lang() { return lang; } };
 })();
+/* FIX 1: een top-level `const` wordt GEEN window-property; app.js test op
+   window.I18N en viel daardoor altijd terug op Nederlands. Expliciet koppelen: */
+window.I18N = I18N;
