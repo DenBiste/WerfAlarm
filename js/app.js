@@ -44,10 +44,10 @@
 
   /* ---------------- GPX laden ---------------- */
   async function loadFile(file) {
-    let text, pts, name;
+    let text, pts, eles, name;
     try {
       text = await file.text();
-      ({ pts, name } = GPX.parse(text));
+      ({ pts, eles, name } = GPX.parse(text));
     } catch (err) {
       $("error").style.display = "block";
       $("error").textContent = "GPX kon niet gelezen worden: " + err.message;
@@ -58,6 +58,9 @@
     GIPOD.clearCache();                 // nieuwe route = verse data
     lastResults = [];
     route = Geom.buildRoute(pts, name || file.name.replace(/\.gpx$/i, ""));
+    route.rawPts = pts;
+    route.rawEles = eles;               // null als de GPX geen hoogtes bevat
+    route.profile = undefined;          // wordt (lui) gebouwd voor het rapport
     drawRoute();
     $("strip").hidden = true;
     $("dlgpx").disabled = true;
@@ -589,6 +592,81 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     return { data: canvas.toDataURL("image/jpeg", .85) };
   }
 
+  /* ---------------- hoogtedata & weer voor het rapport ---------------- */
+
+  /* Profiel uit de GPX-hoogtes; ontbreken die, dan halen we hoogtes op bij
+     Open-Meteo (open data, geen sleutel). Mislukt ook dat: null. */
+  async function ensureProfile() {
+    if (route.profile !== undefined) return route.profile;
+    let pts = route.rawPts, eles = route.rawEles;
+    if (!eles) {
+      try {
+        const step = Math.max(1, Math.ceil(route.pts.length / 300));
+        pts = route.pts.filter((_, i) => i % step === 0);
+        eles = [];
+        for (let i = 0; i < pts.length; i += 100) {
+          const chunk = pts.slice(i, i + 100);
+          const url = `https://api.open-meteo.com/v1/elevation?latitude=${chunk.map(p => p[0].toFixed(5)).join(",")}&longitude=${chunk.map(p => p[1].toFixed(5)).join(",")}`;
+          const r = await fetch(url);
+          if (!r.ok) throw new Error("hoogtedienst " + r.status);
+          eles.push(...(await r.json()).elevation);
+        }
+      } catch (e) { route.profile = null; return null; }
+    }
+    route.profile = Geom.buildProfile(pts, eles);
+    return route.profile;
+  }
+
+  const COMPASS = ["N", "NNO", "NO", "ONO", "O", "OZO", "ZO", "ZZO", "Z", "ZZW", "ZW", "WZW", "W", "WNW", "NW", "NNW"];
+  const compass = deg => COMPASS[Math.round(deg / 22.5) % 16];
+  const wmoText = c => c === 0 ? "helder" : c <= 2 ? "licht bewolkt" : c === 3 ? "bewolkt"
+    : c <= 48 ? "mist" : c <= 57 ? "motregen" : c <= 67 ? "regen" : c <= 77 ? "sneeuw"
+    : c <= 82 ? "buien" : c <= 86 ? "sneeuwbuien" : "onweer mogelijk";
+
+  /* Dagvoorspelling van Open-Meteo voor het middelpunt van de route.
+     We tonen de voorspelling voor de ritdatum als die binnen het
+     voorspellingsbereik (±15 dagen) valt, anders voor vandaag. */
+  async function fetchWeather() {
+    const lats = route.pts.map(p => p[0]), lons = route.pts.map(p => p[1]);
+    const lat = (Math.min(...lats) + Math.max(...lats)) / 2;
+    const lon = (Math.min(...lons) + Math.max(...lons)) / 2;
+    const today = new Date(); today.setHours(12, 0, 0, 0);
+    const ahead = Math.round((view.rideDate - today) / 864e5);
+    const target = (ahead >= 0 && ahead <= 15) ? view.rideDate : today;
+    const iso = target.toLocaleDateString("en-CA");
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+      `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,` +
+      `wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,cloud_cover_mean` +
+      `&timezone=Europe%2FBrussels&start_date=${iso}&end_date=${iso}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("weerdienst " + r.status);
+    const d = (await r.json()).daily;
+    return {
+      date: target, isRideDate: target !== today || ahead === 0,
+      tmax: d.temperature_2m_max[0], tmin: d.temperature_2m_min[0],
+      wind: d.wind_speed_10m_max[0], gust: d.wind_gusts_10m_max[0],
+      dir: d.wind_direction_10m_dominant[0],
+      pp: d.precipitation_probability_max[0], psum: d.precipitation_sum[0],
+      cloud: d.cloud_cover_mean[0], code: d.weather_code[0]
+    };
+  }
+
+  /* Kort Nederlands karakterportret van een klim op basis van zijn cijfers */
+  function climbStory(c) {
+    const pos = c.startKm < route.km * .3 ? "vroeg in de rit"
+      : c.startKm > route.km * .7 ? "diep in de finale" : "rond halfweg";
+    let aard;
+    if (c.avg < 3.5) aard = "een geleidelijke stijging die vooral ritme en geduld vraagt — echt steil wordt het nergens";
+    else if (c.avg < 6) aard = "een gelijkmatige klim waarop je met een vast tempo goed kunt doorrijden";
+    else if (c.avg < 9) aard = "een stevige helling die kracht vraagt; kies je verzet voor de voet";
+    else aard = "een scherpe kuitenbijter waar je beter niet te enthousiast aan begint";
+    const ritme = c.irregular ? " Het profiel is onregelmatig: stroken vals plat wisselen af met steilere ramps, dus doseer op de steile stukken." : "";
+    const piek = c.max >= c.avg + 2
+      ? ` De steilste strook (tot zo'n ${c.max.toFixed(0)}%) ligt rond km ${c.maxAt.toFixed(1)}.` : "";
+    const lengte = c.lenKm >= 2.5 ? "Een lange inspanning: verdeel je krachten. " : c.lenKm <= 0.6 ? "Kort maar fel: dit kan op momentum. " : "";
+    return `Je pakt deze klim ${pos} mee. Het is ${aard}.${ritme}${piek} ${lengte}Boven sta je op ${c.topEle} m.`.trim();
+  }
+
   async function buildReportPdf() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
@@ -598,8 +676,10 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
           MUTEDc = [86, 94, 104], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [237, 236, 229];
     const dateStr = rideDate.toLocaleDateString("nl-BE");
     let y;
-    let mapImg = null;
+    let mapImg = null, profile = null, weather = null;
     try { mapImg = await buildMapImage(list); } catch (e) { /* schematisch kaartje als vangnet */ }
+    try { profile = await ensureProfile(); } catch (e) { profile = null; }
+    try { weather = await fetchWeather(); } catch (e) { weather = null; }
 
     const stripes = yy => {
       doc.setFillColor(...ORANGEc); doc.rect(0, yy, W, 7, "F");
@@ -734,6 +814,154 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...MUTEDc);
       doc.text(san("Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig."), M, y + 2);
       y += 7;
+    }
+
+    /* ================= SECTIE: HOOGTEPROFIEL & KLIMMEN ================= */
+    const sectionHeader = title => {
+      if (y > 252) newPage();
+      y += 3;
+      doc.setFillColor(...ORANGEc); doc.rect(M, y - 3.6, 4.2, 4.2, "F");
+      doc.setDrawColor(...INKc); doc.setLineWidth(.4); doc.rect(M, y - 3.6, 4.2, 4.2, "D");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(12.5); doc.setTextColor(...INKc);
+      doc.text(title, M + 7, y);
+      doc.setLineWidth(.7); doc.line(M, y + 2.2, W - M, y + 2.2);
+      y += 8;
+    };
+    const fillPoly = (pts, fill) => {
+      if (pts.length < 3) return;
+      doc.setFillColor(...fill);
+      const segs = [];
+      for (let i = 1; i < pts.length; i++) segs.push([pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]]);
+      doc.lines(segs, pts[0][0], pts[0][1], [1, 1], "F", true);
+    };
+    const strokePath = (pts, color, lw) => {
+      doc.setDrawColor(...color); doc.setLineWidth(lw);
+      for (let i = 1; i < pts.length; i++) doc.line(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]);
+    };
+    /* profielgrafiek: gevulde curve, klimzones oranje gemarkeerd */
+    const drawProfileChart = (x, yy, w, h, prof, climbs, lineC, fillC) => {
+      const kmax = prof.km[prof.km.length - 1] || 1;
+      const e0 = prof.min ?? Math.min(...prof.ele), e1 = prof.max ?? Math.max(...prof.ele);
+      const sx = k => x + (k / kmax) * w;
+      const sy = e => yy + h - 3 - ((e - e0) / Math.max(e1 - e0, 1)) * (h - 8);
+      const step = Math.max(1, Math.floor(prof.km.length / 220));
+      const path = [];
+      for (let i = 0; i < prof.km.length; i += step) path.push([sx(prof.km[i]), sy(prof.ele[i])]);
+      path.push([sx(kmax), sy(prof.ele[prof.ele.length - 1])]);
+      fillPoly([[path[0][0], yy + h - 3], ...path, [sx(kmax), yy + h - 3]], fillC);
+      /* klimzones */
+      for (const c of (climbs || [])) {
+        const cp = [];
+        const cs = Math.max(1, Math.floor(c.slice.km.length / 60));
+        for (let i = 0; i < c.slice.km.length; i += cs) cp.push([sx(c.slice.km[i]), sy(c.slice.ele[i])]);
+        cp.push([sx(c.endKm), sy(c.topEle)]);
+        fillPoly([[cp[0][0], yy + h - 3], ...cp, [cp[cp.length - 1][0], yy + h - 3]], [253, 216, 190]);
+      }
+      strokePath(path, lineC, .8);
+      doc.setDrawColor(...INKc); doc.setLineWidth(.4); doc.line(x, yy + h - 3, x + w, yy + h - 3);
+      /* nummers op de toppen */
+      doc.setFont("helvetica", "bold"); doc.setFontSize(6.5);
+      (climbs || []).forEach((c, i) => {
+        const px = sx(c.endKm), py = sy(c.topEle) - 3.4;
+        doc.setFillColor(...DEEPc); doc.setDrawColor(255); doc.setLineWidth(.4);
+        doc.circle(px, py, 2.2, "FD");
+        doc.setTextColor(255, 255, 255); doc.text(String(i + 1), px, py + .9, { align: "center" });
+      });
+      doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...MUTEDc);
+      doc.text("0", x, yy + h + 1); doc.text(`${kmax.toFixed(0)} km`, x + w, yy + h + 1, { align: "right" });
+      doc.text(`${e1} m`, x + w + 1.5, sy(e1) + 1, { align: "left" });
+      doc.text(`${e0} m`, x + w + 1.5, sy(e0) + 1, { align: "left" });
+    };
+
+    sectionHeader("HOOGTEPROFIEL & KLIMMEN");
+    if (!profile) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      const noEle = doc.splitTextToSize(san("Geen hoogtedata beschikbaar: de GPX bevat geen hoogtes en de hoogtedienst was niet bereikbaar. Exporteer je route met hoogteprofiel (Komoot/Strava doen dit standaard) en maak het rapport opnieuw."), CW);
+      doc.text(noEle, M, y); y += noEle.length * 4 + 4;
+    } else {
+      const climbs = Geom.findClimbs(profile);
+      /* overzichtsgrafiek van de volledige rit */
+      if (y + 46 > 282) newPage();
+      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.rect(M, y, CW, 40, "FD");
+      drawProfileChart(M + 3, y + 2, CW - 14, 34, profile, climbs, ROUTEc, [222, 228, 238]);
+      y += 44;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...INKc);
+      const stats = san(`Totaal ${profile.ascent} hoogtemeters over ${route.km.toFixed(1)} km · laagste punt ${profile.min} m · hoogste punt ${profile.max} m · ${climbs.length} ${climbs.length === 1 ? "klim" : "klimmen"} gedetecteerd.`);
+      const statsLines = doc.splitTextToSize(stats, CW);
+      doc.text(statsLines, M, y); y += statsLines.length * 4 + 3;
+
+      if (!climbs.length) {
+        doc.setTextColor(...MUTEDc);
+        const flat = doc.splitTextToSize(san("Een vlak tot golvend parcours zonder noemenswaardige klimmen — hier wint de groep die uit de wind blijft, niet de klimmer."), CW);
+        doc.text(flat, M, y); y += flat.length * 4 + 4;
+      }
+      /* per klim: minigrafiek + portret */
+      climbs.forEach((c, i) => {
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+        const titleTxt = san(`Klim ${i + 1} — km ${c.startKm.toFixed(1)} -> km ${c.endKm.toFixed(1)}`);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+        const statTxt = san(`${c.lenKm.toFixed(2)} km lang · ${c.gain} hoogtemeters · gem. ${c.avg}% · max. ${c.max}%`);
+        const story = doc.splitTextToSize(san(climbStory(c)), CW - 62);
+        const h = Math.max(26, 14 + story.length * 3.9 + 3);
+        if (y + h > 282) newPage();
+        doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+        doc.rect(M, y, CW, h, "FD");
+        doc.setFillColor(...DEEPc); doc.rect(M, y, 2.4, h, "F");
+        /* minigrafiek links */
+        doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
+        doc.rect(M + 5, y + 4, 48, h - 8, "FD");
+        drawProfileChart(M + 7, y + 5, 40, h - 12, { km: c.slice.km.map(k => k - c.startKm), ele: c.slice.ele, min: c.startEle, max: c.topEle }, null, DEEPc, [253, 216, 190]);
+        /* tekst rechts */
+        let ty = y + 8;
+        doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...INKc);
+        doc.text(titleTxt, M + 58, ty); ty += 4.6;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...DEEPc);
+        doc.text(statTxt, M + 58, ty); ty += 4.4;
+        doc.setTextColor(...MUTEDc);
+        doc.text(story, M + 58, ty);
+        y += h + 4;
+      });
+    }
+
+    /* ================= SECTIE: WEERSVOORSPELLING ================= */
+    sectionHeader("WEERSVOORSPELLING");
+    if (!weather) {
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      const noW = doc.splitTextToSize(san("De weersvoorspelling kon niet opgehaald worden (geen internetverbinding of dienst onbereikbaar). Raadpleeg je weerapp voor vertrek."), CW);
+      doc.text(noW, M, y); y += noW.length * 4 + 4;
+    } else {
+      if (y + 34 > 282) newPage();
+      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.rect(M, y, CW, 30, "FD");
+      const wd = weather.date.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
+      doc.text(san(`Voorspelling voor ${wd}${weather.isRideDate ? " (je ritdatum)" : ""} — ${wmoText(weather.code)}`), M + 5, y + 7);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      const col1 = [
+        `Temperatuur: ${Math.round(weather.tmin)}° tot ${Math.round(weather.tmax)}°C`,
+        `Neerslagkans: ${weather.pp ?? "?"}%  ·  neerslag: ${(weather.psum ?? 0).toFixed(1)} mm`
+      ];
+      const col2 = [
+        `Wind: ${Math.round(weather.wind)} km/u uit ${compass(weather.dir)} (rukwinden tot ${Math.round(weather.gust)} km/u)`,
+        `Bewolking: gemiddeld ${Math.round(weather.cloud)}%`
+      ];
+      doc.text(san(col1[0]), M + 5, y + 14); doc.text(san(col1[1]), M + 5, y + 19.5);
+      doc.text(san(col2[0]), M + 92, y + 14); doc.text(san(col2[1]), M + 92, y + 19.5);
+      doc.setFontSize(7.5);
+      doc.text(san(`Bron: Open-Meteo.com · locatie: middelpunt van de route · opgehaald op ${new Date().toLocaleString("nl-BE", { dateStyle: "short", timeStyle: "short" })}`), M + 5, y + 26);
+      y += 34;
+      /* fietsduiding op basis van wind */
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      const windAdvies = weather.wind >= 35
+        ? `Stevige wind uit ${compass(weather.dir)}: plan je lus zo dat je de terugweg wind mee hebt, en hou rekening met rukwinden op open stukken.`
+        : weather.wind >= 20
+          ? `Matige wind uit ${compass(weather.dir)} — merkbaar op open wegen, maar goed te doen.`
+          : `Weinig wind: een dag om van te profiteren.`;
+      const regenAdvies = (weather.pp ?? 0) >= 60 ? " Grote kans op neerslag: neem een regenjasje mee." :
+        (weather.pp ?? 0) >= 30 ? " Een bui is niet uitgesloten; een windvestje kan geen kwaad." : "";
+      const adv = doc.splitTextToSize(san(windAdvies + regenAdvies), CW);
+      doc.text(adv, M, y); y += adv.length * 4 + 3;
     }
 
     /* ---- voettekst + paginanummers ---- */

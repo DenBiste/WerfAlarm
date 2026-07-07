@@ -14,13 +14,20 @@ const GPX = (() => {
     if (!nodes.length) nodes = [...doc.getElementsByTagName("rtept")];
     if (!nodes.length) nodes = [...doc.getElementsByTagName("wpt")];
 
-    const pts = nodes
-      .map(n => [parseFloat(n.getAttribute("lat")), parseFloat(n.getAttribute("lon"))])
-      .filter(p => isFinite(p[0]) && isFinite(p[1]));
+    const pts = [], eles = [];
+    for (const n of nodes) {
+      const lat = parseFloat(n.getAttribute("lat")), lon = parseFloat(n.getAttribute("lon"));
+      if (!isFinite(lat) || !isFinite(lon)) continue;
+      pts.push([lat, lon]);
+      const el = n.getElementsByTagName("ele")[0];
+      const ev = el ? parseFloat(el.textContent) : NaN;
+      eles.push(isFinite(ev) ? ev : null);
+    }
     if (pts.length < 2) throw new Error("Geen trackpunten gevonden in dit bestand");
+    const hasEle = eles.filter(v => v != null).length > pts.length * 0.5;
 
     const nameEl = doc.querySelector("trk > name, metadata > name, rte > name, trk > n, metadata > n");
-    return { pts, name: nameEl ? nameEl.textContent.trim() : "" };
+    return { pts, eles: hasEle ? eles : null, name: nameEl ? nameEl.textContent.trim() : "" };
   }
 
   const escXml = s => String(s).replace(/[<>&'"]/g,

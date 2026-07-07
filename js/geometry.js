@@ -204,5 +204,93 @@ const Geom = (() => {
             P[i - 1][1] + (P[i][1] - P[i - 1][1]) * t];
   }
 
-  return { buildRoute, expandGrid, analyzeGeom, pointAtChain };
+  /* ---------------- hoogteprofiel ---------------- */
+
+  /* Bouwt een gladgemaakt hoogteprofiel {km:[], ele:[]} uit ruwe punten +
+     hoogtes (null-gaten worden geïnterpoleerd), geresampled om de 50 m. */
+  function buildProfile(rawPts, eles) {
+    if (!rawPts || !eles || rawPts.length < 2) return null;
+    const lat0 = rawPts.reduce((a, p) => a + p[0], 0) / rawPts.length * Math.PI / 180;
+    const MX = 111320 * Math.cos(lat0);
+    /* cumulatieve afstand (m) */
+    const dist = [0];
+    for (let i = 1; i < rawPts.length; i++) {
+      const dx = (rawPts[i][1] - rawPts[i - 1][1]) * MX;
+      const dy = (rawPts[i][0] - rawPts[i - 1][0]) * MY;
+      dist.push(dist[i - 1] + Math.hypot(dx, dy));
+    }
+    /* null-hoogtes interpoleren */
+    const e = eles.slice();
+    let last = null;
+    for (let i = 0; i < e.length; i++) {
+      if (e[i] != null) { if (last === null) for (let j = 0; j < i; j++) e[j] = e[i]; last = i; }
+      else if (last !== null) {
+        let next = i; while (next < e.length && e[next] == null) next++;
+        if (next >= e.length) { for (let j = i; j < e.length; j++) e[j] = e[last]; break; }
+        for (let j = i; j < next; j++) e[j] = e[last] + (e[next] - e[last]) * (dist[j] - dist[last]) / (dist[next] - dist[last] || 1);
+        i = next - 1;
+      }
+    }
+    if (e.some(v => v == null)) return null;
+    /* resample om de 50 m */
+    const STEP = 50, total = dist[dist.length - 1];
+    const km = [], ele = [];
+    let idx = 0;
+    for (let d = 0; d <= total; d += STEP) {
+      while (idx < dist.length - 2 && dist[idx + 1] < d) idx++;
+      const t = (d - dist[idx]) / (dist[idx + 1] - dist[idx] || 1);
+      km.push(d / 1000);
+      ele.push(e[idx] + (e[idx + 1] - e[idx]) * Math.max(0, Math.min(1, t)));
+    }
+    /* gladstrijken (glijdend gemiddelde over 250 m) */
+    const sm = ele.map((_, i) => {
+      let s = 0, n = 0;
+      for (let j = Math.max(0, i - 2); j <= Math.min(ele.length - 1, i + 2); j++) { s += ele[j]; n++; }
+      return s / n;
+    });
+    let ascent = 0;
+    for (let i = 1; i < sm.length; i++) if (sm[i] > sm[i - 1]) ascent += sm[i] - sm[i - 1];
+    return { km, ele: sm, ascent: Math.round(ascent),
+             min: Math.round(Math.min(...sm)), max: Math.round(Math.max(...sm)) };
+  }
+
+  /* Detecteert individuele klimmen in een profiel. Een klim eindigt op zijn top
+     zodra het profiel duidelijk terugzakt; kleine tussenzakjes horen bij de klim. */
+  function findClimbs(profile) {
+    if (!profile) return [];
+    const { km, ele } = profile, n = ele.length, climbs = [];
+    let i = 0;
+    while (i < n - 1) {
+      if (ele[i + 1] <= ele[i]) { i++; continue; }
+      let j = i, top = i, topEle = ele[i];
+      while (j < n - 1) {
+        j++;
+        if (ele[j] > topEle) { topEle = ele[j]; top = j; }
+        if (topEle - ele[j] > Math.max(12, (topEle - ele[i]) * .3)) break;   // klim voorbij
+      }
+      const gain = topEle - ele[i], lenKm = km[top] - km[i];
+      if (top > i && lenKm > 0.05 && (gain >= 20 || (gain >= 12 && gain / (lenKm * 10) >= 4))) {
+        /* max helling en onregelmatigheid over 100m-vensters */
+        let maxG = 0, maxAt = km[i]; const grades = [];
+        for (let k = i; k < top - 1; k++) {
+          const g = (ele[k + 2] - ele[k]) / ((km[k + 2] - km[k]) * 1000 || 1) * 100;
+          grades.push(g);
+          if (g > maxG) { maxG = g; maxAt = km[k + 1]; }
+        }
+        const avg = gain / (lenKm * 10);
+        const mean = grades.reduce((a, b) => a + b, 0) / (grades.length || 1);
+        const sd = Math.sqrt(grades.reduce((a, b) => a + (b - mean) ** 2, 0) / (grades.length || 1));
+        climbs.push({
+          startKm: km[i], endKm: km[top], lenKm, gain: Math.round(gain),
+          avg: +avg.toFixed(1), max: +Math.max(maxG, avg).toFixed(1), maxAt: +maxAt.toFixed(1),
+          irregular: sd > 2.5, startEle: Math.round(ele[i]), topEle: Math.round(topEle),
+          slice: { km: km.slice(i, top + 1), ele: ele.slice(i, top + 1) }
+        });
+      }
+      i = Math.max(top, i + 1) + 1;
+    }
+    return climbs;
+  }
+
+  return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs };
 })();
