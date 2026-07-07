@@ -4,7 +4,20 @@
    ========================================================= */
 "use strict";
 (() => {
-  const $ = id => document.getElementById(id);
+  /* Element-lookup die niet crasht als script- en paginaversie niet samengaan
+     (bv. door browsercache): ontbrekende elementen geven een waarschuwing in
+     de console en absorberen alle lees/schrijf-acties. */
+  const $ = id => {
+    const el = document.getElementById(id);
+    if (el) return el;
+    console.warn(`WerfAlarm: element #${id} ontbreekt — pagina en script zijn mogelijk verschillende versies. Ververs met Ctrl+F5.`);
+    const absorb = new Proxy(function () {}, {
+      get: (t, p) => (p === Symbol.toPrimitive ? () => "" : absorb),
+      set: () => true,
+      apply: () => absorb
+    });
+    return absorb;
+  };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
   /* ---------------- state ---------------- */
@@ -31,28 +44,31 @@
 
   /* ---------------- GPX laden ---------------- */
   async function loadFile(file) {
+    let text, pts, name;
     try {
-      const text = await file.text();
-      const { pts, name } = GPX.parse(text);
-      rawGpx = text;
-      GIPOD.clearCache();                 // nieuwe route = verse data
-      lastResults = [];
-      route = Geom.buildRoute(pts, name || file.name.replace(/\.gpx$/i, ""));
-      drawRoute();
-      $("strip").hidden = true;
-      $("dlgpx").disabled = true;
-      $("report").disabled = true;
-      $("routeinfo").innerHTML = `<b>${esc(route.name)}</b> · ${route.km.toFixed(1)} km · ${route.tiles.length} zones`;
-      $("footroute").textContent = `Route: ${route.name}, ${route.km.toFixed(1)} km, ${pts.length} punten`;
-      $("run").disabled = false;
-      $("status").textContent = "Klaar om te controleren.";
-      $("error").style.display = "none";
-      $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>Route geladen. Kies je ritdatum en klik op <b>Controleer route</b>.</div>`;
-      document.getElementById("app").scrollIntoView({ behavior: "smooth" });
+      text = await file.text();
+      ({ pts, name } = GPX.parse(text));
     } catch (err) {
       $("error").style.display = "block";
       $("error").textContent = "GPX kon niet gelezen worden: " + err.message;
+      return;
     }
+    /* vanaf hier is het bestand geldig; UI-fouten tonen we niet als GPX-fout */
+    rawGpx = text;
+    GIPOD.clearCache();                 // nieuwe route = verse data
+    lastResults = [];
+    route = Geom.buildRoute(pts, name || file.name.replace(/\.gpx$/i, ""));
+    drawRoute();
+    $("strip").hidden = true;
+    $("dlgpx").disabled = true;
+    $("report").disabled = true;
+    $("routeinfo").innerHTML = `<b>${esc(route.name)}</b> · ${route.km.toFixed(1)} km · ${route.tiles.length} zones`;
+    $("footroute").textContent = `Route: ${route.name}, ${route.km.toFixed(1)} km, ${pts.length} punten`;
+    $("run").disabled = false;
+    $("status").textContent = "Klaar om te controleren.";
+    $("error").style.display = "none";
+    $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>Route geladen. Kies je ritdatum en klik op <b>Controleer route</b>.</div>`;
+    document.getElementById("app").scrollIntoView({ behavior: "smooth" });
   }
 
   $("gpxfile").addEventListener("change", e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
@@ -486,14 +502,181 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
 </body></html>`;
   }
 
-  $("report").addEventListener("click", () => {
+  /* ---------------- PDF-rapport (jsPDF, lazy geladen; HTML als vangnet) ---------------- */
+  let jspdfPromise = null;
+  function loadJsPDF() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+    if (!jspdfPromise) jspdfPromise = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.onload = res;
+      s.onerror = () => { jspdfPromise = null; rej(new Error("PDF-bibliotheek kon niet geladen worden")); };
+      document.head.appendChild(s);
+    });
+    return jspdfPromise;
+  }
+
+  /* PDF kan geen emoji/pijlen in de standaardfonts aan */
+  const san = s => String(s).replace(/→/g, "->").replace(/⛔/g, "").replace(/[^\x20-\xFF\n]/g, "").replace(/\s+/g, " ").trim();
+
+  function buildReportPdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const { list, rideDate, range, truncated } = view;
+    const W = 210, M = 14, CW = W - 2 * M;
+    const INKc = [20, 22, 25], ORANGEc = [244, 89, 11], DEEPc = [217, 72, 15], HARDc = [166, 30, 4],
+          MUTEDc = [86, 94, 104], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [237, 236, 229];
+    const dateStr = rideDate.toLocaleDateString("nl-BE");
+    let y;
+
+    const stripes = yy => {
+      doc.setFillColor(...ORANGEc); doc.rect(0, yy, W, 7, "F");
+      doc.setDrawColor(255); doc.setLineWidth(2.4);
+      for (let x = -8; x < W + 8; x += 7) doc.line(x, yy + 7, x + 7, yy);
+    };
+    const diamond = (cx, cy, r, fill) => {
+      doc.setFillColor(...fill); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
+      doc.lines([[r, r], [-r, r], [-r, -r], [r, -r]], cx, cy - r, [1, 1], "FD", true);
+    };
+    const newPage = () => { doc.addPage(); y = 18; };
+
+    /* ---- kop ---- */
+    stripes(0);
+    y = 20;
+    doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(...INKc);
+    doc.text("WERF", M, y);
+    doc.setTextColor(...ORANGEc); doc.text("ALARM", M + doc.getTextWidth("WERF"), y);
+    doc.setTextColor(...INKc); doc.text(" — RAPPORT", M + doc.getTextWidth("WERFALARM"), y);
+    y += 7;
+    doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
+    doc.text(san(`${route.name} · ${route.km.toFixed(1)} km · ritdatum ${dateStr}`), M, y); y += 4.5;
+    const opts = [`zoekafstand ${range === 0 ? "0 m (enkel op de route zelf)" : "±" + range + " m"}`];
+    if (view.modes.size !== 3) opts.push(`weggebruikers: ${modesLabel(view.modes)}`);
+    if (view.onlyHard) opts.push("filter: enkel blokkades");
+    opts.push(`gemaakt op ${new Date().toLocaleString("nl-BE")}`);
+    doc.text(san(opts.join(" · ")), M, y); y += 6;
+
+    /* ---- schematische kaart ---- */
+    const mapH = 82;
+    doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
+    doc.rect(M, y, CW, mapH, "FD");
+    const P = route.pts, lats = P.map(p => p[0]), lons = P.map(p => p[1]);
+    const la0 = Math.min(...lats), la1 = Math.max(...lats), lo0 = Math.min(...lons), lo1 = Math.max(...lons);
+    const pad = 8, k = Math.min((CW - 2 * pad) / Math.max(lo1 - lo0, 1e-9), (mapH - 2 * pad) / Math.max(la1 - la0, 1e-9));
+    const X = lon => M + pad + (lon - lo0) * k + (CW - 2 * pad - (lo1 - lo0) * k) / 2;
+    const Y = lat => y + mapH - pad - (lat - la0) * k - (mapH - 2 * pad - (la1 - la0) * k) / 2;
+    doc.setDrawColor(...ROUTEc); doc.setLineWidth(1.1);
+    const step = Math.max(1, Math.floor(P.length / 600));
+    let prev = P[0];
+    for (let i = step; i < P.length; i += step) { doc.line(X(prev[1]), Y(prev[0]), X(P[i][1]), Y(P[i][0])); prev = P[i]; }
+    doc.line(X(prev[1]), Y(prev[0]), X(P[P.length - 1][1]), Y(P[P.length - 1][0]));
+    doc.setFillColor(...OKc); doc.setDrawColor(255); doc.setLineWidth(.6);
+    doc.circle(X(P[0][1]), Y(P[0][0]), 1.9, "FD");
+    doc.setFontSize(7); doc.setFont("helvetica", "bold");
+    for (const r of list) for (const km of r.kms) {
+      const [lat, lon] = Geom.pointAtChain(route, km * 1000);
+      doc.setFillColor(...(isHardFor(r, view.modes) ? HARDc : DEEPc)); doc.setDrawColor(255);
+      doc.circle(X(lon), Y(lat), 2.1, "FD");
+      doc.setTextColor(...INKc);
+      doc.text(`km ${km.toFixed(1)}`, X(lon), Y(lat) - 3.2, { align: "center" });
+    }
+    y += mapH + 6;
+
+    /* ---- routestrook ---- */
+    doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.6);
+    doc.rect(M, y, CW, 14, "FD");
+    const sy = y + 6, sx0 = M + 8, sx1 = M + CW - 8;
+    doc.setDrawColor(...INKc); doc.setLineWidth(1.1); doc.line(sx0, sy, sx1, sy);
+    doc.setFillColor(...OKc); doc.setLineWidth(.4); doc.circle(sx0, sy, 1.7, "FD");
+    doc.setFillColor(...INKc); doc.rect(sx1 - 1.7, sy - 1.7, 3.4, 3.4, "F");
+    for (const r of list) for (const km of r.kms)
+      diamond(sx0 + (sx1 - sx0) * Math.min(1, km / route.km), sy, 1.9, isHardFor(r, view.modes) ? HARDc : ORANGEc);
+    doc.setFont("helvetica", "bold"); doc.setFontSize(7); doc.setTextColor(...MUTEDc);
+    doc.text("0", sx0, y + 12); doc.text(`${route.km.toFixed(0)} km`, sx1, y + 12, { align: "right" });
+    y += 20;
+
+    /* ---- werven ---- */
+    if (!list.length) {
+      doc.setDrawColor(...INKc); doc.setLineWidth(.5); doc.rect(M, y, CW, 18, "D");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...OKc);
+      doc.text(view.onlyHard ? "Geen blokkades!" : "Vrije baan!", W / 2, y + 8, { align: "center" });
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      doc.text(san(view.onlyHard
+        ? `Geen afsluitingen of omleidingen op deze route op ${dateStr} (lichtere hinder niet berekend).`
+        : `Geen hinder gevonden op deze route op ${dateStr}. Goede rit!`), W / 2, y + 13.5, { align: "center" });
+      y += 24;
+    }
+    const tX = M + 27, tW = W - M - tX;
+    for (const r of list) {
+      const hard = isHardFor(r, view.modes);
+      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  [BLOKKADE]" : ""), tW);
+      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? r.dist + " m van de track" : "op de track"}`);
+      const metaLines = doc.splitTextToSize(meta, tW);
+      const passLine = r.kms.length > 1 ? `Passages: km ${r.kms.map(k => k.toFixed(1)).join(" · ")}` : null;
+      const consLines = consText(r) ? doc.splitTextToSize(san(consText(r)), tW) : [];
+      const h = 8 + titleLines.length * 4.6 + metaLines.length * 3.9 + (passLine ? 3.9 : 0) + consLines.length * 3.9 + 4.5;
+      if (y + h > 282) newPage();
+
+      doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.rect(M, y, CW, h, "FD");
+      doc.setFillColor(...(hard ? HARDc : DEEPc)); doc.rect(M, y, 2.4, h, "F");
+      /* km-badge */
+      doc.setDrawColor(...INKc); doc.setFillColor(255, 255, 255); doc.rect(M + 6, y + 4, 17, 11, "FD");
+      doc.setFillColor(...INKc); doc.rect(M + 6, y + 4, 17, 4, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(255, 212, 59);
+      doc.text(r.kms.length > 1 ? `${r.kms.length}x KM` : "KM", M + 14.5, y + 6.9, { align: "center" });
+      doc.setFontSize(10); doc.setTextColor(...INKc);
+      doc.text(r.km.toFixed(1), M + 14.5, y + 12.6, { align: "center" });
+
+      let ty = y + 8;
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...(hard ? HARDc : INKc));
+      doc.text(titleLines, tX, ty); ty += titleLines.length * 4.6;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.setTextColor(...MUTEDc);
+      doc.text(metaLines, tX, ty); ty += metaLines.length * 3.9;
+      if (passLine) { doc.setFont("helvetica", "bold"); doc.setTextColor(...INKc); doc.text(san(passLine), tX, ty); ty += 3.9; doc.setFont("helvetica", "normal"); }
+      if (consLines.length) { doc.setTextColor(...(hard ? HARDc : DEEPc)); doc.text(consLines, tX, ty); ty += consLines.length * 3.9; }
+      doc.setTextColor(...ROUTEc); doc.setFontSize(8);
+      doc.textWithLink("Bekijk op kaart", tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
+      y += h + 4;
+    }
+    if (truncated) {
+      if (y > 275) newPage();
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...MUTEDc);
+      doc.text(san("Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig."), M, y + 2);
+      y += 7;
+    }
+
+    /* ---- voettekst + paginanummers ---- */
+    const pages = doc.getNumberOfPages();
+    for (let p = 1; p <= pages; p++) {
+      doc.setPage(p);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...MUTEDc);
+      doc.text(san("Bron: GIPOD open data (geo.api.vlaanderen.be), zelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen. Controleer kort voor vertrek opnieuw."), M, 291);
+      doc.text(`${p}/${pages}`, W - M, 291, { align: "right" });
+    }
+    return doc;
+  }
+
+  $("report").addEventListener("click", async () => {
     if (!view) return;
-    const blob = new Blob([buildReportHtml()], { type: "text/html" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
+    const btn = $("report"), old = btn.textContent;
+    btn.disabled = true; btn.textContent = "PDF maken…";
     const slug = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-").toLowerCase();
-    a.download = `werfalarm-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}.html`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    const base = `werfalarm-rapport-${slug}-${view.rideDate.toISOString().slice(0, 10)}`;
+    try {
+      await loadJsPDF();
+      buildReportPdf().save(base + ".pdf");
+    } catch (e) {
+      /* geen internet of bibliotheek faalt: HTML-rapport als vangnet */
+      const blob = new Blob([buildReportHtml()], { type: "text/html" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = base + ".html";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      $("status").textContent = "PDF-bibliotheek niet beschikbaar — HTML-rapport gedownload.";
+    } finally {
+      btn.disabled = false; btn.textContent = old;
+    }
   });
 })();
