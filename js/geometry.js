@@ -147,34 +147,62 @@ const Geom = (() => {
   }
 
   /* Analyseer een GeoJSON-geometrie t.o.v. de route.
-     Geeft [minAfstand_m, kilometerpunt_m] of null. */
+     Geeft {dist, kms} terug: kleinste afstand (m) én álle kilometerpunten
+     waar de route deze zone passeert (lussen kunnen dezelfde werf twee keer
+     kruisen). Passages die langs de route >400 m uit elkaar liggen tellen
+     als aparte doortochten. Geeft null als niets binnen `thresh` valt. */
   function analyzeGeom(route, g, thresh) {
     if (!g) return null;
     const paths = geomPaths(g);
     const toXY = (lat, lon) => [lon * route.MX, lat * MY];
-    let best = Infinity, ch = 0, anyNear = false;
+    const hits = []; // [afstand, kilometerstand]
+    let best = Infinity;
 
     for (const p of paths) {
       for (const pt of densify(route, p)) {
         if (!nearRoute(route, pt[0], pt[1])) continue;
-        anyNear = true;
         const [d, c] = distToRoute(route, pt[0], pt[1]);
-        if (d < best) { best = d; ch = c; }
-        if (best === 0) break;
+        if (d < best) best = d;
+        if (d <= thresh) hits.push([d, c]);
       }
     }
-    const isPoly = g.type === "Polygon" || g.type === "MultiPolygon";
-    if ((!anyNear || best > thresh) && isPoly) {
-      /* een grote zone kan de route omsluiten zonder nabije rand */
+    if (g.type === "Polygon" || g.type === "MultiPolygon") {
+      /* routepunten ín de zone tellen als passage op afstand 0 */
       const rings = paths.map(p => p.map(c => toXY(c[1], c[0])));
-      for (let i = 0; i < route.R.length; i += 3)
-        for (const r of rings)
-          if (pointInRing(route.R[i][0], route.R[i][1], r)) return [0, route.CHAIN[i]];
-      if (!anyNear) return null;
+      for (let i = 0; i < route.R.length; i += 3) {
+        for (const r of rings) {
+          if (pointInRing(route.R[i][0], route.R[i][1], r)) {
+            hits.push([0, route.CHAIN[i]]); best = 0; break;
+          }
+        }
+      }
     }
-    if (!anyNear) return null;
-    return [best, ch];
+    if (!hits.length) return null;
+
+    /* clusteren tot één km-punt per doortocht (representant = dichtstbijzijnde) */
+    hits.sort((a, b) => a[1] - b[1]);
+    const kms = [];
+    let cd = hits[0][0], cc = hits[0][1], prev = hits[0][1];
+    for (let i = 1; i < hits.length; i++) {
+      const [d, c] = hits[i];
+      if (c - prev > 400) { kms.push(cc); cd = d; cc = c; }
+      else if (d < cd) { cd = d; cc = c; }
+      prev = c;
+    }
+    kms.push(cc);
+    return { dist: best, kms };
   }
 
-  return { buildRoute, expandGrid, analyzeGeom };
+  /* Punt [lat,lon] op de route bij kilometerstand m (meter) */
+  function pointAtChain(route, m) {
+    const CH = route.CHAIN, P = route.pts;
+    if (m <= 0) return P[0];
+    if (m >= CH[CH.length - 1]) return P[P.length - 1];
+    let i = 1; while (CH[i] < m) i++;
+    const t = (m - CH[i - 1]) / (CH[i] - CH[i - 1] || 1);
+    return [P[i - 1][0] + (P[i][0] - P[i - 1][0]) * t,
+            P[i - 1][1] + (P[i][1] - P[i - 1][1]) * t];
+  }
+
+  return { buildRoute, expandGrid, analyzeGeom, pointAtChain };
 })();

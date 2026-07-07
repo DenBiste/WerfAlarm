@@ -7,27 +7,38 @@ const GIPOD = (() => {
   const BASE = "https://geo.api.vlaanderen.be/GIPOD/ogc/features/v1/collections/";
   const COLLECTIONS = ["HINDER", "INNAME"]; // gevalideerde hinder + innames (werken)
 
+  /* Sessiecache: bij een nieuwe controle met enkel een andere datum of
+     zoekafstand hergebruiken we de al opgehaalde objecten (max 10 min oud). */
+  const cache = new Map();
+  const TTL = 10 * 60 * 1000;
+  function clearCache() { cache.clear(); }
+
   /* Bevraagt alle zones (bboxes) voor beide collecties.
      onFeature(feature, collection) wordt voor elk object aangeroepen,
      onProgress(done, total) na elke afgehandelde deelbevraging.
-     Geeft {truncated} terug. */
+     Geeft {truncated, fromCache} terug. */
   async function query(tiles, onFeature, onProgress) {
     const total = tiles.length * COLLECTIONS.length;
-    let done = 0, truncated = false;
+    let done = 0, truncated = false, fromCache = 0;
     for (const col of COLLECTIONS) {
       for (let t = 0; t < tiles.length; t += 5) {           // 5 tegelijk
         await Promise.all(tiles.slice(t, t + 5).map(async bb => {
           const url = `${BASE}${col}/items?bbox=${bb.join(",")}&limit=1000&f=json`;
-          const r = await fetch(url, { headers: { Accept: "application/geo+json, application/json" } });
-          if (!r.ok) throw new Error(`GIPOD antwoordde ${r.status} voor ${col}`);
-          const j = await r.json();
+          let entry = cache.get(url);
+          if (!entry || Date.now() - entry.t > TTL) {
+            const r = await fetch(url, { headers: { Accept: "application/geo+json, application/json" } });
+            if (!r.ok) throw new Error(`GIPOD antwoordde ${r.status} voor ${col}`);
+            const j = await r.json();
+            entry = { t: Date.now(), features: j.features || [], trunc: (j.numberReturned || 0) >= 1000 };
+            cache.set(url, entry);
+          } else fromCache++;
           done++; onProgress(done, total);
-          if ((j.numberReturned || 0) >= 1000) truncated = true;
-          for (const f of (j.features || [])) onFeature(f, col);
+          if (entry.trunc) truncated = true;
+          for (const f of entry.features) onFeature(f, col);
         }));
       }
     }
-    return { truncated };
+    return { truncated, fromCache };
   }
 
   /* ---- attributen robuust uitlezen (schema kan variëren) ---- */
@@ -61,5 +72,5 @@ const GIPOD = (() => {
     return new Date(s).toLocaleDateString("nl-BE", { day: "numeric", month: "short", year: "numeric" });
   };
 
-  return { query, summarize, fmtDate };
+  return { query, summarize, fmtDate, clearCache };
 })();

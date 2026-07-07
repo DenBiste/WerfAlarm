@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="CSS/style.css">
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
@@ -94,11 +94,26 @@
       <label for="range" title="Hoe ver naast je track gezocht wordt. 0 = enkel hinder die je track zelf raakt of kruist.">Zoekafstand (m)</label>
       <input type="number" id="range" min="0" max="250" step="10" value="100">
     </div>
+    <div class="field">
+      <label id="modelabel" title="Voor welke weggebruikers wil je hinder zien? Combineer vrij; gevolgen die enkel voor niet-gekozen groepen gelden worden weggelaten. Algemene afsluitingen gelden voor iedereen.">Weggebruiker(s)</label>
+      <div class="seg" id="mode" role="group" aria-labelledby="modelabel">
+        <button type="button" class="seg-btn" data-m="bike" aria-pressed="true">🚴 Fietsers</button>
+        <button type="button" class="seg-btn" data-m="ped" aria-pressed="true">🚶 Voetgangers</button>
+        <button type="button" class="seg-btn" data-m="motor" aria-pressed="true">🚗 Gemotoriseerd</button>
+        <button type="button" class="seg-btn" data-m="all" aria-pressed="true" title="Selecteer alle weggebruikers">Alles</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="onlyhard" title="Berekent en toont enkel blokkades: afsluitingen, geen doorgang, omleidingen en fietshinder. Lichtere hinder wordt overgeslagen.">Filter</label>
+      <label class="checkline"><input type="checkbox" id="onlyhard"> ⛔ Enkel blokkades</label>
+    </div>
     <button id="run" class="btn btn-dark" disabled>Controleer route</button>
-    <button id="copy" class="btn btn-ghost" disabled>Kopieer resultaat</button>
+    <button id="dlgpx" class="btn btn-ghost" disabled title="Download je GPX met een waarschuwings-waypoint op elke werf — zichtbaar op je Garmin of Wahoo">GPX + werven ⬇</button>
+    <button id="report" class="btn btn-ghost" disabled title="Download een zelfstandig HTML-rapport met kaartje en alle details — makkelijk te delen">Rapport ⬇</button>
     <span id="status" class="status" role="status">Laad eerst een GPX-bestand.</span>
   </div>
   <div id="bar" class="bar"><i></i></div>
+  <div id="strip" class="strip" hidden></div>
 
   <div class="workspace">
     <div id="map" class="map"></div>
