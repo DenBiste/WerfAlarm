@@ -517,7 +517,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
   }
 
   /* PDF kan geen emoji/pijlen in de standaardfonts aan */
-  const san = s => String(s).replace(/→/g, "->").replace(/⛔/g, "").replace(/[^\x20-\xFF\n]/g, "").replace(/\s+/g, " ").trim();
+  const san = s => String(s).replace(/→/g, "->").replace(/⛔/g, "").replace(/[^\x20-\xFF\n]/g, "").replace(/[ \t\r\n]+/g, " ").trim();
 
   /* Echte kaartafbeelding voor het rapport: OSM-tegels + route + markers op een
      canvas. Faalt dit (offline, geblokkeerde tegels), dan valt het rapport
@@ -621,12 +621,15 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     doc.setTextColor(...INKc); doc.text(" — RAPPORT", M + doc.getTextWidth("WERFALARM"), y);
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
-    doc.text(san(`${route.name} · ${route.km.toFixed(1)} km · ritdatum ${dateStr}`), M, y); y += 4.5;
+    /* ook de infolijnen afbreken op paginabreedte (lange routenamen!) */
+    const info1 = doc.splitTextToSize(san(`${route.name} · ${route.km.toFixed(1)} km · ritdatum ${dateStr}`), CW);
+    doc.text(info1, M, y); y += info1.length * 4.5;
     const opts = [`zoekafstand ${range === 0 ? "0 m (enkel op de route zelf)" : "±" + range + " m"}`];
     if (view.modes.size !== 3) opts.push(`weggebruikers: ${modesLabel(view.modes)}`);
     if (view.onlyHard) opts.push("filter: enkel blokkades");
-    opts.push(`gemaakt op ${new Date().toLocaleString("nl-BE")}`);
-    doc.text(san(opts.join(" · ")), M, y); y += 6;
+    opts.push(`gemaakt\u00A0op\u00A0${new Date().toLocaleString("nl-BE", { dateStyle: "short", timeStyle: "short" }).replace(/ /g, "\u00A0")}`);
+    const info2 = doc.splitTextToSize(san(opts.join(" · ")), CW);
+    doc.text(info2, M, y); y += info2.length * 4.5 + 1.5;
 
     /* ---- kaart (echte OSM-kaart; schematisch als vangnet) ---- */
     const mapH = 84;
@@ -735,10 +738,13 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
 
     /* ---- voettekst + paginanummers ---- */
     const pages = doc.getNumberOfPages();
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7);
+    const foot = doc.splitTextToSize(san("Bron: GIPOD open data (geo.api.vlaanderen.be), zelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen. Controleer kort voor vertrek opnieuw."), CW - 12);
     for (let p = 1; p <= pages; p++) {
       doc.setPage(p);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...MUTEDc);
-      doc.text(san("Bron: GIPOD open data (geo.api.vlaanderen.be), zelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen. Controleer kort voor vertrek opnieuw."), M, 291);
+      doc.text(foot, M, 293 - foot.length * 2.8);
       doc.text(`${p}/${pages}`, W - M, 291, { align: "right" });
     }
     return doc;
