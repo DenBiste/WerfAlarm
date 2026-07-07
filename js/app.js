@@ -525,7 +525,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
   /* Echte kaartafbeelding voor het rapport: OSM-tegels + route + markers op een
      canvas. Faalt dit (offline, geblokkeerde tegels), dan valt het rapport
      terug op het schematische kaartje. */
-  async function buildMapImage(list) {
+  async function buildMapImage(list, L) {
     const S = 2, cw = 780, ch = 360;                       // 780×360 ≙ 182×84 mm in het rapport
     const canvas = document.createElement("canvas");
     canvas.width = cw * S; canvas.height = ch * S;
@@ -584,7 +584,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     }
     /* verplichte bronvermelding */
     ctx.font = "10px Arial"; ctx.textAlign = "right";
-    const at = "© OpenStreetMap-bijdragers";
+    const at = L.osmAttr;
     const aw = ctx.measureText(at).width + 8;
     ctx.fillStyle = "rgba(255,255,255,.82)"; ctx.fillRect(cw - aw - 4, ch - 16, aw, 13);
     ctx.fillStyle = "#333"; ctx.fillText(at, cw - 8, ch - 6);
@@ -617,11 +617,131 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     return route.profile;
   }
 
-  const COMPASS = ["N", "NNO", "NO", "ONO", "O", "OZO", "ZO", "ZZO", "Z", "ZZW", "ZW", "WZW", "W", "WNW", "NW", "NNW"];
-  const compass = deg => COMPASS[Math.round(deg / 22.5) % 16];
-  const wmoText = c => c === 0 ? "helder" : c <= 2 ? "licht bewolkt" : c === 3 ? "bewolkt"
-    : c <= 48 ? "mist" : c <= 57 ? "motregen" : c <= 67 ? "regen" : c <= 77 ? "sneeuw"
-    : c <= 82 ? "buien" : c <= 86 ? "sneeuwbuien" : "onweer mogelijk";
+  /* ---------------- rapporttaal (NL/EN) ---------------- */
+  const REPL = {
+    nl: {
+      locale: "nl-BE",
+      compass: ["N","NNO","NO","ONO","O","OZO","ZO","ZZO","Z","ZZW","ZW","WZW","W","WNW","NW","NNW"],
+      wmo: c => c === 0 ? "helder" : c <= 2 ? "licht bewolkt" : c === 3 ? "bewolkt"
+        : c <= 48 ? "mist" : c <= 57 ? "motregen" : c <= 67 ? "regen" : c <= 77 ? "sneeuw"
+        : c <= 82 ? "buien" : c <= 86 ? "sneeuwbuien" : "onweer mogelijk",
+      modes: { bike: "fietsers", ped: "voetgangers", motor: "gemotoriseerd verkeer" }, allUsers: "alle weggebruikers",
+      rapport: " — RAPPORT",
+      info1: (name, km, d) => `${name} · ${km} km · ritdatum ${d}`,
+      searchDist: r => `zoekafstand ${r === 0 ? "0 m (enkel op de route zelf)" : "±" + r + " m"}`,
+      usersLbl: t => `weggebruikers: ${t}`, filterHardTxt: "filter: enkel blokkades",
+      madeOn: t => `gemaakt\u00A0op\u00A0${t}`,
+      freeTitle: "Vrije baan!", freeBody: d => `Geen hinder gevonden op deze route op ${d}. Goede rit!`,
+      noBlocksTitle: "Geen blokkades!", noBlocksBody: d => `Geen afsluitingen of omleidingen op deze route op ${d} (lichtere hinder niet berekend).`,
+      kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOKKADE]",
+      onTrack: "op de track", fromTrack: d => `${d} m van de track`,
+      passages: l => `Passages: km ${l}`, viewMap: "Bekijk op kaart",
+      truncNote: "Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.",
+      secClimbs: "HOOGTEPROFIEL & KLIMMEN", secWeather: "WEERSVOORSPELLING",
+      noEle: "Geen hoogtedata beschikbaar: de GPX bevat geen hoogtes en de hoogtedienst was niet bereikbaar. Exporteer je route met hoogteprofiel (Komoot/Strava doen dit standaard) en maak het rapport opnieuw.",
+      profStats: (asc, km, min, max, n) => `Totaal ${asc} hoogtemeters over ${km} km · laagste punt ${min} m · hoogste punt ${max} m · ${n} ${n === 1 ? "klim" : "klimmen"} gedetecteerd.`,
+      flat: "Een vlak tot golvend parcours zonder noemenswaardige klimmen — hier wint de groep die uit de wind blijft, niet de klimmer.",
+      climbTitle: (i, a, b) => `Klim ${i} — km ${a} -> km ${b}`,
+      climbStats: (l, g, a, m) => `${l} km lang · ${g} hoogtemeters · gem. ${a}% · max. ${m}%`,
+      noWeather: "De weersvoorspelling kon niet opgehaald worden (geen internetverbinding of dienst onbereikbaar). Raadpleeg je weerapp voor vertrek.",
+      forecastFor: (wd, ride, cond) => `Voorspelling voor ${wd}${ride ? " (je ritdatum)" : ""} — ${cond}`,
+      wTemp: (a, b) => `Temperatuur: ${a}° tot ${b}°C`,
+      wPrecip: (p, s) => `Neerslagkans: ${p}%  ·  neerslag: ${s} mm`,
+      wWind: (v, dir, g) => `Wind: ${v} km/u uit ${dir} (rukwinden tot ${g} km/u)`,
+      wCloud: c => `Bewolking: gemiddeld ${c}%`,
+      wSrc: t => `Bron: Open-Meteo.com · locatie: middelpunt van de route · opgehaald op ${t}`,
+      osmAttr: "© OpenStreetMap-bijdragers",
+      windHeader: "De wind onderweg",
+      rain60: " Grote kans op neerslag: neem een regenjasje mee.",
+      rain30: " Een bui is niet uitgesloten; een windvestje kan geen kwaad.",
+      footer: "Bron: GIPOD open data (geo.api.vlaanderen.be), zelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen. Controleer kort voor vertrek opnieuw.",
+      calm: v => `Met hooguit ${v} km/u wind speelt de windrichting vandaag nauwelijks een rol — een dag om van te profiteren.`,
+      windFrom: (d, v) => `De wind komt uit ${d} (${v} km/u): `,
+      verbs: { tegen: ["zit de wind pal tegen", "rijd je vol in de wind", "moet je tegen de wind opboksen"],
+               mee: ["duwt hij je in de rug", "heb je hem lekker mee", "surf je op de wind"],
+               zij: ["staat hij dwars op de weg", "komt hij van opzij", "waait het dwars over de weg"] },
+      rStart: to => `van de start tot km ${to}`, rEnd: f => `van km ${f} tot de aankomst`, rMid: (a, b) => `van km ${a} tot km ${b}`,
+      moreLegs: "; daarna wisselt het nog enkele keren",
+      windTotals: (t, m, z) => `Alles samen: zo'n ${t} km tegenwind, ${m} km meewind en ${z} km zijwind.`,
+      finMee: " Goed nieuws voor de finale: de laatste kilometers heb je de wind in de rug.",
+      finTegen: " Hou een reserve over: de slotkilometers gaan tegen de wind in.",
+      cOpen: { vroeg: ["Amper op gang en daar is de eerste hindernis al.", "De rit kleurt meteen bergop — deze pak je met frisse benen.", "Vroeg in de rit: ideaal om het klimritme te vinden."],
+               mid: ["Halverwege de lus duikt deze helling op.", "Midden in de rit wacht deze inspanning.", "Net wanneer je in je ritme zit, buigt de weg hier omhoog."],
+               finale: ["Diep in de finale, op verzuurde benen, wacht deze klim.", "Deze komt wanneer het pijn doet: in de slotfase.", "Met de streep in zicht moet je hier nog één keer vol aan de bak."] },
+      cChar: [["Meer vals plat dan echte klim: het venijn zit in het tempo, niet in de stijging.", "Een tapijt dat traag omhoog rolt — verraderlijk, juist omdat je hem amper ziet.", "Geleidelijk oplopend; wie hier te gretig rijdt, betaalt verderop de rekening."],
+              ["Een eerlijke, gelijkmatige klim waarop een vast tempo loont.", "Mooi regelmatig stijgen: zoek je cadans en hou die vast tot boven.", "Klassiek klimwerk zonder verrassingen — een kwestie van doseren."],
+              ["Stevig klimwerk dat kracht vraagt; schakel terug vóór de voet.", "Hier wordt geselecteerd: de helling bijt stevig door.", "Een pittige strook waar lichte verzetten goud waard zijn."],
+              ["Een regelrechte muur — uit het zadel en doorbijten.", "Kort lontje, veel dynamiet: dit loopt venijnig steil op.", "Scherprechter van formaat; te groot verzet en je staat stil."]],
+      cRitme: [" Het percentage danst voortdurend: vals plat wisselt met venijnige ramps.", " Geen twee hectometers zijn gelijk — schakelen, schakelen, schakelen.", " Onregelmatig van profiel: bewaar marge voor de steile stroken."],
+      cPiek: (m, at) => [` Rond km ${at} piekt de helling tot zo'n ${m}%.`, ` De zwaarste meters (~${m}%) liggen bij km ${at}.`, ` Let op de ramp van ~${m}% ter hoogte van km ${at}.`],
+      cLong: " Ruim drie kilometer klimmen: verdeel je krachten.", cShort: " Kort en krachtig — op momentum te nemen.",
+      cHardest: " Dit is de scherprechter van de dag.", cLongest: " Met afstand de langste beklimming van de route.",
+      cBackToBack: " Hij volgt kort op de vorige klim — veel herstel krijg je niet.",
+      cSlot: t => [`Boven, op ${t} m, kun je even doorademen.`, `De top ligt op ${t} m.`, `Bovenaan wacht ${t} m — en heel even respijt.`]
+    },
+    en: {
+      locale: "en-GB",
+      compass: ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"],
+      wmo: c => c === 0 ? "clear" : c <= 2 ? "partly cloudy" : c === 3 ? "overcast"
+        : c <= 48 ? "fog" : c <= 57 ? "drizzle" : c <= 67 ? "rain" : c <= 77 ? "snow"
+        : c <= 82 ? "showers" : c <= 86 ? "snow showers" : "thunderstorms possible",
+      modes: { bike: "cyclists", ped: "pedestrians", motor: "motorised traffic" }, allUsers: "all road users",
+      rapport: " — REPORT",
+      info1: (name, km, d) => `${name} · ${km} km · ride date ${d}`,
+      searchDist: r => `search distance ${r === 0 ? "0 m (route itself only)" : "±" + r + " m"}`,
+      usersLbl: t => `road users: ${t}`, filterHardTxt: "filter: blockages only",
+      madeOn: t => `generated\u00A0on\u00A0${t}`,
+      freeTitle: "All clear!", freeBody: d => `No disruptions found on this route on ${d}. Enjoy the ride!`,
+      noBlocksTitle: "No blockages!", noBlocksBody: d => `No closures or diversions on this route on ${d} (lighter disruptions were not calculated).`,
+      kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOCKAGE]",
+      onTrack: "on the track", fromTrack: d => `${d} m from the track`,
+      passages: l => `Passages: km ${l}`, viewMap: "View on map",
+      truncNote: "Note: at least one sub-area hit the 1000-object limit; results may be incomplete.",
+      secClimbs: "ELEVATION PROFILE & CLIMBS", secWeather: "WEATHER FORECAST",
+      noEle: "No elevation data available: the GPX contains no altitudes and the elevation service could not be reached. Export your route with elevation (Komoot/Strava include it by default) and regenerate the report.",
+      profStats: (asc, km, min, max, n) => `Total ${asc} m of climbing over ${km} km · lowest point ${min} m · highest point ${max} m · ${n} climb${n === 1 ? "" : "s"} detected.`,
+      flat: "A flat to rolling course without any notable climbs — the group that stays out of the wind wins here, not the climber.",
+      climbTitle: (i, a, b) => `Climb ${i} — km ${a} -> km ${b}`,
+      climbStats: (l, g, a, m) => `${l} km long · ${g} m of gain · avg. ${a}% · max. ${m}%`,
+      noWeather: "The weather forecast could not be retrieved (no internet connection or service unavailable). Check your weather app before departure.",
+      forecastFor: (wd, ride, cond) => `Forecast for ${wd}${ride ? " (your ride date)" : ""} — ${cond}`,
+      wTemp: (a, b) => `Temperature: ${a}° to ${b}°C`,
+      wPrecip: (p, s) => `Chance of rain: ${p}%  ·  precipitation: ${s} mm`,
+      wWind: (v, dir, g) => `Wind: ${v} km/h from ${dir} (gusts up to ${g} km/h)`,
+      wCloud: c => `Cloud cover: average ${c}%`,
+      wSrc: t => `Source: Open-Meteo.com · location: midpoint of the route · retrieved on ${t}`,
+      osmAttr: "© OpenStreetMap contributors",
+      windHeader: "The wind along the way",
+      rain60: " High chance of rain: pack a rain jacket.",
+      rain30: " A shower can't be ruled out; a wind vest won't hurt.",
+      footer: "Source: GIPOD open data (geo.api.vlaanderen.be), same source as geopunt.be/hinder-in-kaart — Flanders only. Check again shortly before departure.",
+      calm: v => `With at most ${v} km/h of wind, wind direction hardly matters today — a day to make the most of.`,
+      windFrom: (d, v) => `The wind blows from the ${d} (${v} km/h): `,
+      verbs: { tegen: ["you ride straight into a headwind", "the wind is dead against you", "you battle a headwind"],
+               mee: ["it pushes you along", "you enjoy a tailwind", "you surf the tailwind"],
+               zij: ["it blows across the road", "you get a crosswind", "it comes at you from the side"] },
+      rStart: to => `from the start to km ${to}`, rEnd: f => `from km ${f} to the finish`, rMid: (a, b) => `from km ${a} to km ${b}`,
+      moreLegs: "; after that it keeps switching a few more times",
+      windTotals: (t, m, z) => `All in all: roughly ${t} km of headwind, ${m} km of tailwind and ${z} km of crosswind.`,
+      finMee: " Good news for the finale: the last kilometres come with a tailwind.",
+      finTegen: " Keep something in reserve: the closing kilometres go into the wind.",
+      cOpen: { vroeg: ["Barely warmed up and the first obstacle is already there.", "The ride tilts uphill right away — you take this one on fresh legs.", "Early in the ride: ideal for finding your climbing rhythm."],
+               mid: ["Halfway around the loop this climb appears.", "Mid-ride, this effort awaits.", "Just as you settle into a rhythm, the road bends upwards here."],
+               finale: ["Deep in the finale, on tired legs, this climb awaits.", "This one comes when it hurts: in the closing stages.", "With the finish in sight you have to dig deep one more time."] },
+      cChar: [["More false flat than a real climb: the sting is in the pace, not the gradient.", "A carpet that rolls slowly upwards — treacherous precisely because you barely see it.", "A gradual rise; ride it too eagerly and you pay for it later."],
+              ["An honest, even climb where a steady tempo pays off.", "Nicely regular climbing: find your cadence and hold it to the top.", "Classic climbing without surprises — a matter of pacing."],
+              ["Solid climbing that demands strength; shift down before the foot of it.", "Selection happens here: the gradient bites hard.", "A punchy stretch where light gears are worth gold."],
+              ["An outright wall — out of the saddle and grind through.", "Short fuse, lots of dynamite: this ramps up viciously.", "A brutal leg-breaker; pick too big a gear and you grind to a halt."]],
+      cRitme: [" The gradient dances constantly: false flat alternates with vicious ramps.", " No two hectometres are alike — shift, shift, shift.", " Irregular in profile: keep a margin for the steep sections."],
+      cPiek: (m, at) => [` Around km ${at} the gradient peaks at about ${m}%.`, ` The hardest metres (~${m}%) sit near km ${at}.`, ` Watch out for the ~${m}% ramp around km ${at}.`],
+      cLong: " More than three kilometres of climbing: spread your effort.", cShort: " Short and sharp — take it on momentum.",
+      cHardest: " This is the judge of the day.", cLongest: " By far the longest climb of the route.",
+      cBackToBack: " It follows hot on the heels of the previous climb — recovery is scarce.",
+      cSlot: t => [`At the top, at ${t} m, you can breathe again.`, `The summit sits at ${t} m.`, `Up top, ${t} m awaits — and a brief respite.`]
+    }
+  };
+  const repLang = () => REPL[document.getElementById("replang") && document.getElementById("replang").value === "en" ? "en" : "nl"];
+  const compassL = (deg, L) => L.compass[Math.round(deg / 22.5) % 16];
 
   /* Dagvoorspelling van Open-Meteo voor het middelpunt van de route.
      We tonen de voorspelling voor de ritdatum als die binnen het
@@ -651,8 +771,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     };
   }
 
-  /* Windrol per wegvak: rijrichting vs. dominante windrichting.
-     Levert samengevoegde stukken op: tegen / mee / zij. */
+  /* Windrol per wegvak: rijrichting vs. dominante windrichting. */
   function windLegs(windDir) {
     const step = 750, total = route.km * 1000;
     const cls = [];
@@ -663,7 +782,6 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       let diff = Math.abs(((bearing - windDir) % 360 + 360) % 360); if (diff > 180) diff = 360 - diff;
       cls.push(diff <= 60 ? "tegen" : diff >= 120 ? "mee" : "zij");
     }
-    /* samenvoegen + korte stukjes (<2.5 km) opslorpen */
     let legs = [];
     cls.forEach((c, i) => {
       const from = i * step / 1000, to = from + step / 1000;
@@ -684,86 +802,43 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     return legs;
   }
 
-  /* Verhaal over de wind onderweg: waar tegen, waar mee, waar dwars. */
-  function windStory(w) {
-    if (w.wind < 12)
-      return `Met hooguit ${Math.round(w.wind)} km/u wind speelt de windrichting vandaag nauwelijks een rol — een dag om van te profiteren.`;
+  /* Verhaal over de wind onderweg, in de gekozen rapporttaal. */
+  function windStory(w, L) {
+    if (w.wind < 12) return L.calm(Math.round(w.wind));
     const legs = windLegs(w.dir);
     const tot = { tegen: 0, mee: 0, zij: 0 };
     legs.forEach(l => tot[l.c] += l.to - l.from);
-    const verb = { tegen: ["zit de wind pal tegen", "rijd je vol in de wind", "moet je tegen de wind opboksen"],
-                   mee: ["duwt hij je in de rug", "heb je hem lekker mee", "surf je op de wind"],
-                   zij: ["staat hij dwars op de weg", "komt hij van opzij", "waait het dwars over de weg"] };
     const seg = legs.slice(0, 6).map((l, i) => {
-      const range = l.from < 0.5 ? `van de start tot km ${l.to.toFixed(0)}`
-        : l.to > route.km - 0.7 ? `van km ${l.from.toFixed(0)} tot de aankomst`
-        : `van km ${l.from.toFixed(0)} tot km ${l.to.toFixed(0)}`;
-      return `${range} ${verb[l.c][i % 3]}`;
+      const range = l.from < 0.5 ? L.rStart(l.to.toFixed(0))
+        : l.to > route.km - 0.7 ? L.rEnd(l.from.toFixed(0))
+        : L.rMid(l.from.toFixed(0), l.to.toFixed(0));
+      return `${range} ${L.verbs[l.c][i % 3]}`;
     }).join("; ");
-    const extra = legs.length > 6 ? "; daarna wisselt het nog enkele keren" : "";
-    const som = `Alles samen: zo'n ${Math.round(tot.tegen)} km tegenwind, ${Math.round(tot.mee)} km meewind en ${Math.round(tot.zij)} km zijwind.`;
-    const finale = legs.length && legs[legs.length - 1].c === "mee"
-      ? " Goed nieuws voor de finale: de laatste kilometers heb je de wind in de rug."
-      : legs.length && legs[legs.length - 1].c === "tegen"
-        ? " Hou een reserve over: de slotkilometers gaan tegen de wind in."
-        : "";
-    return `De wind komt uit ${compass(w.dir)} (${Math.round(w.wind)} km/u): ${seg}${extra}. ${som}${finale}`;
+    const extra = legs.length > 6 ? L.moreLegs : "";
+    const som = L.windTotals(Math.round(tot.tegen), Math.round(tot.mee), Math.round(tot.zij));
+    const finale = legs.length && legs[legs.length - 1].c === "mee" ? L.finMee
+      : legs.length && legs[legs.length - 1].c === "tegen" ? L.finTegen : "";
+    return `${L.windFrom(compassL(w.dir, L), Math.round(w.wind))}${seg}${extra}. ${som}${finale}`;
   }
 
-  /* Gevarieerd Nederlands karakterportret van een klim: zinsdelen worden per
-     klim uit pools gekozen (deterministisch, op volgnummer) en aangevuld met
-     context — zwaarste van de dag, opeenvolgende klimmen, langste beklimming. */
-  function climbStory(c, i, climbs) {
+  /* Gevarieerd karakterportret van een klim, in de gekozen rapporttaal. */
+  function climbStory(c, i, climbs, L) {
     const pick = (arr, seed) => arr[seed % arr.length];
     const s = i;
     const pos = c.startKm < route.km * .3 ? "vroeg" : c.startKm > route.km * .7 ? "finale" : "mid";
-    const open = pick({
-      vroeg: ["Amper op gang en daar is de eerste hindernis al.",
-              "De rit kleurt meteen bergop — deze pak je met frisse benen.",
-              "Vroeg in de rit: ideaal om het klimritme te vinden."],
-      mid: ["Halverwege de lus duikt deze helling op.",
-            "Midden in de rit wacht deze inspanning.",
-            "Net wanneer je in je ritme zit, buigt de weg hier omhoog."],
-      finale: ["Diep in de finale, op verzuurde benen, wacht deze klim.",
-               "Deze komt wanneer het pijn doet: in de slotfase.",
-               "Met de streep in zicht moet je hier nog één keer vol aan de bak."]
-    }[pos], s);
+    const open = pick(L.cOpen[pos], s);
     const band = c.avg < 3.5 ? 0 : c.avg < 6 ? 1 : c.avg < 9 ? 2 : 3;
-    const karakter = pick([
-      ["Meer vals plat dan echte klim: het venijn zit in het tempo, niet in de stijging.",
-       "Een tapijt dat traag omhoog rolt — verraderlijk, juist omdat je hem amper ziet.",
-       "Geleidelijk oplopend; wie hier te gretig rijdt, betaalt verderop de rekening."],
-      ["Een eerlijke, gelijkmatige klim waarop een vast tempo loont.",
-       "Mooi regelmatig stijgen: zoek je cadans en hou die vast tot boven.",
-       "Klassiek klimwerk zonder verrassingen — een kwestie van doseren."],
-      ["Stevig klimwerk dat kracht vraagt; schakel terug vóór de voet.",
-       "Hier wordt geselecteerd: de helling bijt stevig door.",
-       "Een pittige strook waar lichte verzetten goud waard zijn."],
-      ["Een regelrechte muur — uit het zadel en doorbijten.",
-       "Kort lontje, veel dynamiet: dit loopt venijnig steil op.",
-       "Scherprechter van formaat; te groot verzet en je staat stil."]
-    ][band], s);
-    const ritme = c.irregular ? pick([
-      " Het percentage danst voortdurend: vals plat wisselt met venijnige ramps.",
-      " Geen twee hectometers zijn gelijk — schakelen, schakelen, schakelen.",
-      " Onregelmatig van profiel: bewaar marge voor de steile stroken."], s) : "";
-    const piek = c.max >= c.avg + 2 ? pick([
-      ` Rond km ${c.maxAt.toFixed(1)} piekt de helling tot zo'n ${c.max.toFixed(0)}%.`,
-      ` De zwaarste meters (~${c.max.toFixed(0)}%) liggen bij km ${c.maxAt.toFixed(1)}.`,
-      ` Let op de ramp van ~${c.max.toFixed(0)}% ter hoogte van km ${c.maxAt.toFixed(1)}.`], s) : "";
-    const lente = c.lenKm >= 3 ? " Ruim drie kilometer klimmen: verdeel je krachten." :
-      c.lenKm <= 0.6 ? " Kort en krachtig — op momentum te nemen." : "";
-    /* context t.o.v. de andere klimmen */
+    const karakter = pick(L.cChar[band], s);
+    const ritme = c.irregular ? pick(L.cRitme, s) : "";
+    const piek = c.max >= c.avg + 2 ? pick(L.cPiek(c.max.toFixed(0), c.maxAt.toFixed(1)), s) : "";
+    const lente = c.lenKm >= 3 ? L.cLong : c.lenKm <= 0.6 ? L.cShort : "";
     let context = "";
     const score = x => x.gain * x.avg;
-    if (climbs.length > 1 && score(c) === Math.max(...climbs.map(score))) context += " Dit is de scherprechter van de dag.";
+    if (climbs.length > 1 && score(c) === Math.max(...climbs.map(score))) context += L.cHardest;
     if (climbs.length > 1 && c.lenKm === Math.max(...climbs.map(x => x.lenKm)) && c.lenKm >= 1.5 && score(c) !== Math.max(...climbs.map(score)))
-      context += " Met afstand de langste beklimming van de route.";
-    if (i > 0 && c.startKm - climbs[i - 1].endKm < 3) context += " Hij volgt kort op de vorige klim — veel herstel krijg je niet.";
-    const slot = pick([
-      `Boven, op ${c.topEle} m, kun je even doorademen.`,
-      `De top ligt op ${c.topEle} m.`,
-      `Bovenaan wacht ${c.topEle} m — en heel even respijt.`], s + 1);
+      context += L.cLongest;
+    if (i > 0 && c.startKm - climbs[i - 1].endKm < 3) context += L.cBackToBack;
+    const slot = pick(L.cSlot(c.topEle), s + 1);
     return `${open} ${karakter}${ritme}${piek}${lente}${context} ${slot}`.replace(/\s+/g, " ").trim();
   }
 
@@ -774,10 +849,11 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     const W = 210, M = 14, CW = W - 2 * M;
     const INKc = [20, 22, 25], ORANGEc = [244, 89, 11], DEEPc = [217, 72, 15], HARDc = [166, 30, 4],
           MUTEDc = [86, 94, 104], ROUTEc = [47, 90, 168], OKc = [43, 138, 62], CHALKc = [237, 236, 229];
-    const dateStr = rideDate.toLocaleDateString("nl-BE");
+    const L = repLang();
+    const dateStr = rideDate.toLocaleDateString(L.locale);
     let y;
     let mapImg = null, profile = null, weather = null;
-    try { mapImg = await buildMapImage(list); } catch (e) { /* schematisch kaartje als vangnet */ }
+    try { mapImg = await buildMapImage(list, L); } catch (e) { /* schematisch kaartje als vangnet */ }
     try { profile = await ensureProfile(); } catch (e) { profile = null; }
     try { weather = await fetchWeather(); } catch (e) { weather = null; }
 
@@ -798,16 +874,17 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     doc.setFont("helvetica", "bold"); doc.setFontSize(21); doc.setTextColor(...INKc);
     doc.text("WERF", M, y);
     doc.setTextColor(...ORANGEc); doc.text("ALARM", M + doc.getTextWidth("WERF"), y);
-    doc.setTextColor(...INKc); doc.text(" — RAPPORT", M + doc.getTextWidth("WERFALARM"), y);
+    doc.setTextColor(...INKc); doc.text(L.rapport, M + doc.getTextWidth("WERFALARM"), y);
     y += 7;
     doc.setFont("helvetica", "normal"); doc.setFontSize(9.5); doc.setTextColor(...MUTEDc);
     /* ook de infolijnen afbreken op paginabreedte (lange routenamen!) */
-    const info1 = doc.splitTextToSize(san(`${route.name} · ${route.km.toFixed(1)} km · ritdatum ${dateStr}`), CW);
+    const info1 = doc.splitTextToSize(san(L.info1(route.name, route.km.toFixed(1), dateStr)), CW);
     doc.text(info1, M, y); y += info1.length * 4.5;
-    const opts = [`zoekafstand ${range === 0 ? "0 m (enkel op de route zelf)" : "±" + range + " m"}`];
-    if (view.modes.size !== 3) opts.push(`weggebruikers: ${modesLabel(view.modes)}`);
-    if (view.onlyHard) opts.push("filter: enkel blokkades");
-    opts.push(`gemaakt\u00A0op\u00A0${new Date().toLocaleString("nl-BE", { dateStyle: "short", timeStyle: "short" }).replace(/ /g, "\u00A0")}`);
+    const opts = [L.searchDist(range)];
+    const usersTxt = view.modes.size === 3 ? L.allUsers : ["bike", "ped", "motor"].filter(m => view.modes.has(m)).map(m => L.modes[m]).join(" + ");
+    if (view.modes.size !== 3) opts.push(L.usersLbl(usersTxt));
+    if (view.onlyHard) opts.push(L.filterHardTxt);
+    opts.push(L.madeOn(new Date().toLocaleString(L.locale, { dateStyle: "short", timeStyle: "short" }).replace(/ /g, "\u00A0")));
     const info2 = doc.splitTextToSize(san(opts.join(" · ")), CW);
     doc.text(info2, M, y); y += info2.length * 4.5 + 1.5;
 
@@ -859,11 +936,9 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     if (!list.length) {
       doc.setDrawColor(...INKc); doc.setLineWidth(.5); doc.rect(M, y, CW, 18, "D");
       doc.setFont("helvetica", "bold"); doc.setFontSize(12); doc.setTextColor(...OKc);
-      doc.text(view.onlyHard ? "Geen blokkades!" : "Vrije baan!", W / 2, y + 8, { align: "center" });
+      doc.text(view.onlyHard ? L.noBlocksTitle : L.freeTitle, W / 2, y + 8, { align: "center" });
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      doc.text(san(view.onlyHard
-        ? `Geen afsluitingen of omleidingen op deze route op ${dateStr} (lichtere hinder niet berekend).`
-        : `Geen hinder gevonden op deze route op ${dateStr}. Goede rit!`), W / 2, y + 13.5, { align: "center" });
+      doc.text(san(view.onlyHard ? L.noBlocksBody(dateStr) : L.freeBody(dateStr)), W / 2, y + 13.5, { align: "center" });
       y += 24;
     }
     const tX = M + 27, tW = W - M - tX - 3;   // 3 mm binnenmarge rechts
@@ -872,14 +947,14 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       /* Belangrijk: splitTextToSize meet met het ACTIEVE font — dus vóór elke
          meting exact het font/formaat instellen waarmee de tekst ook wordt afgedrukt. */
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
-      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  [BLOKKADE]" : ""), tW);
+      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  " + L.blockTag : ""), tW);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? r.dist + " m van de track" : "op de track"}`);
+      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? L.fromTrack(r.dist) : L.onTrack}`);
       const metaLines = doc.splitTextToSize(meta, tW);
       const consLines = consText(r) ? doc.splitTextToSize(san(consText(r)), tW) : [];
       doc.setFont("helvetica", "bold");
       const passLines = r.kms.length > 1
-        ? doc.splitTextToSize(san(`Passages: km ${r.kms.map(k => k.toFixed(1)).join(" · ")}`), tW) : [];
+        ? doc.splitTextToSize(san(L.passages(r.kms.map(k => k.toFixed(1)).join(" · "))), tW) : [];
       const h = 8 + titleLines.length * 4.6 + metaLines.length * 3.9 + passLines.length * 3.9 + consLines.length * 3.9 + 4.5;
       if (y + h > 282) newPage();
 
@@ -890,7 +965,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       doc.setDrawColor(...INKc); doc.setFillColor(255, 255, 255); doc.rect(M + 6, y + 4, 17, 11, "FD");
       doc.setFillColor(...INKc); doc.rect(M + 6, y + 4, 17, 4, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(6); doc.setTextColor(255, 212, 59);
-      doc.text(r.kms.length > 1 ? `${r.kms.length}x KM` : "KM", M + 14.5, y + 6.9, { align: "center" });
+      doc.text(r.kms.length > 1 ? L.kmMulti(r.kms.length) : L.kmLbl, M + 14.5, y + 6.9, { align: "center" });
       doc.setFontSize(10); doc.setTextColor(...INKc);
       doc.text(r.km.toFixed(1), M + 14.5, y + 12.6, { align: "center" });
 
@@ -906,13 +981,13 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       }
       if (consLines.length) { doc.setTextColor(...(hard ? HARDc : DEEPc)); doc.text(consLines, tX, ty); ty += consLines.length * 3.9; }
       doc.setTextColor(...ROUTEc); doc.setFontSize(8);
-      doc.textWithLink("Bekijk op kaart", tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
+      doc.textWithLink(L.viewMap, tX, ty, { url: `https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}` });
       y += h + 4;
     }
     if (truncated) {
       if (y > 275) newPage();
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...MUTEDc);
-      doc.text(san("Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig."), M, y + 2);
+      doc.text(san(L.truncNote), M, y + 2);
       y += 7;
     }
 
@@ -998,10 +1073,10 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       doc.text(`${e0} m`, x + w + 1.5, sy(e0) + 1, { align: "left" });
     };
 
-    chapter("HOOGTEPROFIEL & KLIMMEN", mountainIcon);
+    chapter(L.secClimbs, mountainIcon);
     if (!profile) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const noEle = doc.splitTextToSize(san("Geen hoogtedata beschikbaar: de GPX bevat geen hoogtes en de hoogtedienst was niet bereikbaar. Exporteer je route met hoogteprofiel (Komoot/Strava doen dit standaard) en maak het rapport opnieuw."), CW);
+      const noEle = doc.splitTextToSize(san(L.noEle), CW);
       doc.text(noEle, M, y); y += noEle.length * 4 + 4;
     } else {
       const climbs = Geom.findClimbs(profile);
@@ -1012,22 +1087,22 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
       drawProfileChart(M + 3, y + 2, CW - 14, 34, profile, climbs, ROUTEc, [222, 228, 238]);
       y += 44;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...INKc);
-      const stats = san(`Totaal ${profile.ascent} hoogtemeters over ${route.km.toFixed(1)} km · laagste punt ${profile.min} m · hoogste punt ${profile.max} m · ${climbs.length} ${climbs.length === 1 ? "klim" : "klimmen"} gedetecteerd.`);
+      const stats = san(L.profStats(profile.ascent, route.km.toFixed(1), profile.min, profile.max, climbs.length));
       const statsLines = doc.splitTextToSize(stats, CW);
       doc.text(statsLines, M, y); y += statsLines.length * 4 + 3;
 
       if (!climbs.length) {
         doc.setTextColor(...MUTEDc);
-        const flat = doc.splitTextToSize(san("Een vlak tot golvend parcours zonder noemenswaardige klimmen — hier wint de groep die uit de wind blijft, niet de klimmer."), CW);
+        const flat = doc.splitTextToSize(san(L.flat), CW);
         doc.text(flat, M, y); y += flat.length * 4 + 4;
       }
       /* per klim: minigrafiek + portret */
       climbs.forEach((c, i) => {
         doc.setFont("helvetica", "bold"); doc.setFontSize(10);
-        const titleTxt = san(`Klim ${i + 1} — km ${c.startKm.toFixed(1)} -> km ${c.endKm.toFixed(1)}`);
+        const titleTxt = san(L.climbTitle(i + 1, c.startKm.toFixed(1), c.endKm.toFixed(1)));
         doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-        const statTxt = san(`${c.lenKm.toFixed(2)} km lang · ${c.gain} hoogtemeters · gem. ${c.avg}% · max. ${c.max}%`);
-        const story = doc.splitTextToSize(san(climbStory(c, i, climbs)), CW - 62);
+        const statTxt = san(L.climbStats(c.lenKm.toFixed(2), c.gain, c.avg, c.max));
+        const story = doc.splitTextToSize(san(climbStory(c, i, climbs, L)), CW - 62);
         const h = Math.max(26, 14 + story.length * 3.9 + 3);
         if (y + h > 282) newPage();
         doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
@@ -1050,39 +1125,38 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     }
 
     /* ================= SECTIE: WEERSVOORSPELLING ================= */
-    chapter("WEERSVOORSPELLING", weatherIcon);
+    chapter(L.secWeather, weatherIcon);
     if (!weather) {
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const noW = doc.splitTextToSize(san("De weersvoorspelling kon niet opgehaald worden (geen internetverbinding of dienst onbereikbaar). Raadpleeg je weerapp voor vertrek."), CW);
+      const noW = doc.splitTextToSize(san(L.noWeather), CW);
       doc.text(noW, M, y); y += noW.length * 4 + 4;
     } else {
       if (y + 34 > 282) newPage();
       doc.setFillColor(255, 255, 255); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
       doc.rect(M, y, CW, 30, "FD");
-      const wd = weather.date.toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      const wd = weather.date.toLocaleDateString(L.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
-      doc.text(san(`Voorspelling voor ${wd}${weather.isRideDate ? " (je ritdatum)" : ""} — ${wmoText(weather.code)}`), M + 5, y + 7);
+      doc.text(san(L.forecastFor(wd, weather.isRideDate, L.wmo(weather.code))), M + 5, y + 7);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
       const col1 = [
-        `Temperatuur: ${Math.round(weather.tmin)}° tot ${Math.round(weather.tmax)}°C`,
-        `Neerslagkans: ${weather.pp ?? "?"}%  ·  neerslag: ${(weather.psum ?? 0).toFixed(1)} mm`
+        L.wTemp(Math.round(weather.tmin), Math.round(weather.tmax)),
+        L.wPrecip(weather.pp ?? "?", (weather.psum ?? 0).toFixed(1))
       ];
       const col2 = [
-        `Wind: ${Math.round(weather.wind)} km/u uit ${compass(weather.dir)} (rukwinden tot ${Math.round(weather.gust)} km/u)`,
-        `Bewolking: gemiddeld ${Math.round(weather.cloud)}%`
+        L.wWind(Math.round(weather.wind), compassL(weather.dir, L), Math.round(weather.gust)),
+        L.wCloud(Math.round(weather.cloud))
       ];
       doc.text(san(col1[0]), M + 5, y + 14); doc.text(san(col1[1]), M + 5, y + 19.5);
       doc.text(san(col2[0]), M + 92, y + 14); doc.text(san(col2[1]), M + 92, y + 19.5);
       doc.setFontSize(7.5);
-      doc.text(san(`Bron: Open-Meteo.com · locatie: middelpunt van de route · opgehaald op ${new Date().toLocaleString("nl-BE", { dateStyle: "short", timeStyle: "short" })}`), M + 5, y + 26);
+      doc.text(san(L.wSrc(new Date().toLocaleString(L.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 26);
       y += 34;
       /* de wind onderweg: waar tegen, waar mee, waar dwars */
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
-      doc.text("De wind onderweg", M, y); y += 4.5;
+      doc.text(L.windHeader, M, y); y += 4.5;
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
-      const regenAdvies = (weather.pp ?? 0) >= 60 ? " Grote kans op neerslag: neem een regenjasje mee." :
-        (weather.pp ?? 0) >= 30 ? " Een bui is niet uitgesloten; een windvestje kan geen kwaad." : "";
-      const adv = doc.splitTextToSize(san(windStory(weather) + regenAdvies), CW);
+      const regenAdvies = (weather.pp ?? 0) >= 60 ? L.rain60 : (weather.pp ?? 0) >= 30 ? L.rain30 : "";
+      const adv = doc.splitTextToSize(san(windStory(weather, L) + regenAdvies), CW);
       const advH = adv.length * 4;
       if (y + advH > 284) newPage();
       doc.text(adv, M, y); y += advH + 3;
@@ -1092,7 +1166,7 @@ Gegenereerd met WerfAlarm; de situatie kan wijzigen, controleer kort voor vertre
     const pages = doc.getNumberOfPages();
     doc.setFont("helvetica", "normal"); doc.setFontSize(7);
     doc.setFont("helvetica", "normal"); doc.setFontSize(7);
-    const foot = doc.splitTextToSize(san("Bron: GIPOD open data (geo.api.vlaanderen.be), zelfde bron als geopunt.be/hinder-in-kaart — enkel Vlaanderen. Controleer kort voor vertrek opnieuw."), CW - 12);
+    const foot = doc.splitTextToSize(san(L.footer), CW - 12);
     for (let p = 1; p <= pages; p++) {
       doc.setPage(p);
       doc.setFont("helvetica", "normal"); doc.setFontSize(7); doc.setTextColor(...MUTEDc);

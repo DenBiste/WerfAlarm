@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,300..900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="css/style.css?v=21">
+<link rel="stylesheet" href="css/style.css?v=22">
 </head>
 <body>
 
@@ -107,6 +107,13 @@
       <label for="onlyhard" title="Berekent en toont enkel blokkades: afsluitingen, geen doorgang, omleidingen en fietshinder. Lichtere hinder wordt overgeslagen.">Filter</label>
       <label class="checkline"><input type="checkbox" id="onlyhard"> ⛔ Enkel blokkades</label>
     </div>
+    <div class="field">
+      <label for="replang" title="Taal van het PDF-rapport / Language of the PDF report">Rapporttaal</label>
+      <select id="replang">
+        <option value="nl">Nederlands</option>
+        <option value="en">English</option>
+      </select>
+    </div>
     <button id="run" class="btn btn-dark" disabled>Controleer route</button>
     <button id="dlgpx" class="btn btn-ghost" disabled title="Download je GPX met een waarschuwings-waypoint op elke werf — zichtbaar op je Garmin of Wahoo">GPX + werven ⬇</button>
     <button id="report" class="btn btn-ghost" disabled title="Download een PDF-rapport met kaartje en alle details — makkelijk te delen (lukt de PDF niet, dan krijg je automatisch een HTML-versie)">Rapport (PDF) ⬇</button>
@@ -143,9 +150,9 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="js/geometry.js?v=21"></script>
-<script src="js/gpx.js?v=21"></script>
-<script src="js/gipod.js?v=21"></script>
-<script src="js/app.js?v=21"></script>
+<script src="js/geometry.js?v=22"></script>
+<script src="js/gpx.js?v=22"></script>
+<script src="js/gipod.js?v=22"></script>
+<script src="js/app.js?v=22"></script>
 </body>
 </html>
