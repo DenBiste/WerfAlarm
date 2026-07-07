@@ -1150,6 +1150,72 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       });
     }
 
+    /* ---- vectoriconen voor het weer (standaard-PDF-fonts kennen geen emoji) ---- */
+    const GREYc = [176, 180, 170];
+    const wxKind = c => c === 0 ? "sun" : c <= 2 ? "partsun" : c === 3 ? "cloud"
+      : c <= 48 ? "fog" : c <= 67 ? "rain" : c <= 77 ? "snow" : c <= 82 ? "rain"
+      : c <= 86 ? "snow" : "storm";
+    const drawCloud = (cx, cy, s, fill) => {
+      doc.setFillColor(...fill); doc.setDrawColor(...INKc); doc.setLineWidth(.35);
+      doc.circle(cx - s * .55, cy + s * .15, s * .42, "FD");
+      doc.circle(cx + s * .05, cy - s * .18, s * .55, "FD");
+      doc.circle(cx + s * .62, cy + s * .18, s * .4, "FD");
+      doc.setFillColor(...fill);
+      doc.rect(cx - s * .55, cy + s * .12, s * 1.17, s * .45, "F");
+      doc.setDrawColor(...INKc);
+      doc.line(cx - s * .95, cy + s * .57, cx + s * 1.0, cy + s * .57);
+    };
+    const drawSun = (cx, cy, s) => {
+      doc.setDrawColor(...ORANGEc); doc.setLineWidth(.5);
+      for (let i = 0; i < 8; i++) {
+        const a0 = i * Math.PI / 4;
+        doc.line(cx + Math.cos(a0) * s * .62, cy + Math.sin(a0) * s * .62,
+                 cx + Math.cos(a0) * s * .95, cy + Math.sin(a0) * s * .95);
+      }
+      doc.setFillColor(...ORANGEc); doc.setDrawColor(...INKc); doc.setLineWidth(.35);
+      doc.circle(cx, cy, s * .45, "FD");
+    };
+    const drawWx = (kind, cx, cy, s) => {
+      if (kind === "sun") return drawSun(cx, cy, s);
+      if (kind === "partsun") { drawSun(cx - s * .35, cy - s * .35, s * .7); drawCloud(cx + s * .15, cy + s * .2, s * .8, PAPERc); return; }
+      if (kind === "cloud") return drawCloud(cx, cy, s, GREYc);
+      if (kind === "fog") {
+        doc.setDrawColor(...MUTEDc); doc.setLineWidth(.7);
+        for (let i = -1; i <= 1; i++) doc.line(cx - s * .8, cy + i * s * .35, cx + s * .8, cy + i * s * .35);
+        return;
+      }
+      drawCloud(cx, cy - s * .15, s * .85, kind === "storm" ? GREYc : PAPERc);
+      if (kind === "rain") {
+        doc.setDrawColor(...ROUTEc); doc.setLineWidth(.55);
+        for (let i = -1; i <= 1; i++) doc.line(cx + i * s * .38, cy + s * .5, cx + i * s * .38 - s * .16, cy + s * .85);
+      } else if (kind === "snow") {
+        doc.setFillColor(...ROUTEc);
+        for (let i = -1; i <= 1; i++) doc.circle(cx + i * s * .38, cy + s * .68, s * .09, "F");
+      } else if (kind === "storm") {
+        doc.setFillColor(...ORANGEc);
+        doc.triangle(cx - s * .1, cy + s * .35, cx + s * .28, cy + s * .35, cx - s * .05, cy + s * .72, "F");
+        doc.triangle(cx + s * .18, cy + s * .55, cx - s * .2, cy + s * .55, cx + s * .12, cy + s * .95, "F");
+      }
+    };
+    /* mini-iconen per meetwaarde */
+    const icoThermo = (cx, cy) => {
+      doc.setDrawColor(...HARDc); doc.setLineWidth(.7);
+      doc.line(cx, cy - 1.8, cx, cy + .7);
+      doc.setFillColor(...HARDc); doc.circle(cx, cy + 1.3, .85, "F");
+    };
+    const icoDrop = (cx, cy) => {
+      doc.setFillColor(...ROUTEc);
+      doc.triangle(cx - 1, cy + .2, cx + 1, cy + .2, cx, cy - 1.9, "F");
+      doc.circle(cx, cy + .6, 1.05, "F");
+    };
+    const icoWind = (cx, cy) => {
+      doc.setDrawColor(...PINEc); doc.setLineWidth(.6);
+      doc.line(cx - 1.8, cy - 1.1, cx + 1.4, cy - 1.1);
+      doc.line(cx - 1.8, cy, cx + 1.9, cy);
+      doc.line(cx - 1.8, cy + 1.1, cx + .9, cy + 1.1);
+    };
+    const icoCloudS = (cx, cy) => drawCloud(cx, cy, 1.7, GREYc);
+
     /* ================= SECTIE: WEERSVOORSPELLING ================= */
     chapter(RL.secWeather, weatherIcon);
     if (!weather) {
@@ -1157,26 +1223,32 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       const noW = doc.splitTextToSize(san(RL.noWeather), CW);
       doc.text(noW, M, y); y += noW.length * 4 + 4;
     } else {
-      if (y + 34 > 282) newPage();
-      doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
-      doc.roundedRect(M, y, CW, 30, 3, 3, "FD");
-      const wd = weather.date.toLocaleDateString(RL.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-      doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
-      doc.text(san(RL.forecastFor(wd, weather.isRideDate, RL.wmo(weather.code))), M + 5, y + 7);
-      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      /* kolom 2 (wind) kan lang zijn: afbreken op kolombreedte, kaart groeit mee */
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9);
       const col1 = [
         RL.wTemp(Math.round(weather.tmin), Math.round(weather.tmax)),
         RL.wPrecip(weather.pp ?? "?", (weather.psum ?? 0).toFixed(1))
       ];
-      const col2 = [
-        RL.wWind(Math.round(weather.wind), compassL(weather.dir, RL), Math.round(weather.gust)),
-        RL.wCloud(Math.round(weather.cloud))
-      ];
-      doc.text(san(col1[0]), M + 5, y + 14); doc.text(san(col1[1]), M + 5, y + 19.5);
-      doc.text(san(col2[0]), M + 92, y + 14); doc.text(san(col2[1]), M + 92, y + 19.5);
+      const windLines = doc.splitTextToSize(san(RL.wWind(Math.round(weather.wind), compassL(weather.dir, RL), Math.round(weather.gust))), 76);
+      const cloudTxt = san(RL.wCloud(Math.round(weather.cloud)));
+      const extra = (windLines.length - 1) * 4;
+      if (y + 38 + extra > 282) newPage();
+      doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
+      doc.roundedRect(M, y, CW, 34 + extra, 3, 3, "FD");
+      /* groot conditie-icoon rechtsboven, naast de (afgebroken) titel */
+      drawWx(wxKind(weather.code), M + CW - 14, y + 8.5, 6);
+      const wd = weather.date.toLocaleDateString(RL.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+      doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
+      doc.text(doc.splitTextToSize(san(RL.forecastFor(wd, weather.isRideDate, RL.wmo(weather.code))), CW - 32), M + 5, y + 7);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
+      /* mini-iconen vóór elke meetwaarde */
+      icoThermo(M + 6.5, y + 17);    doc.text(san(col1[0]), M + 11, y + 18);
+      icoDrop(M + 6.5, y + 23.2);    doc.text(san(col1[1]), M + 11, y + 24);
+      icoWind(M + 93.5, y + 17.2);   doc.text(windLines, M + 98, y + 18);
+      icoCloudS(M + 93.5, y + 23.4 + extra); doc.text(cloudTxt, M + 98, y + 24 + extra);
       doc.setFontSize(7.5);
-      doc.text(san(RL.wSrc(new Date().toLocaleString(RL.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 26);
-      y += 34;
+      doc.text(san(RL.wSrc(new Date().toLocaleString(RL.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 30 + extra);
+      y += 38 + extra;
       /* de wind onderweg: waar tegen, waar mee, waar dwars */
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
       doc.text(RL.windHeader, M, y); y += 4.5;
@@ -1370,11 +1442,14 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const wd = w.date.toLocaleDateString(uiLoc(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     body.innerHTML =
       `<div class="weather-card">
-         <h3>${esc(san(RL.forecastFor(wd, w.isRideDate, RL.wmo(w.code))))}</h3>
-         <p>${esc(san(RL.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
-         <p>${esc(san(RL.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
-         <p>${esc(san(RL.wWind(Math.round(w.wind), compassL(w.dir, RL), Math.round(w.gust))))}</p>
-         <p>${esc(san(RL.wCloud(Math.round(w.cloud))))}</p>
+         <div class="weather-head">
+           <span class="weather-ico" aria-hidden="true">${wmoIcon(w.code)}</span>
+           <h3>${esc(san(RL.forecastFor(wd, w.isRideDate, RL.wmo(w.code))))}</h3>
+         </div>
+         <p><span class="w-ico" aria-hidden="true">🌡️</span>${esc(san(RL.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
+         <p><span class="w-ico" aria-hidden="true">🌧️</span>${esc(san(RL.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
+         <p><span class="w-ico" aria-hidden="true">💨</span>${esc(san(RL.wWind(Math.round(w.wind), compassL(w.dir, RL), Math.round(w.gust))))}</p>
+         <p><span class="w-ico" aria-hidden="true">☁️</span>${esc(san(RL.wCloud(Math.round(w.cloud))))}</p>
        </div>
        <p class="wind-par"><b>${esc(T("windHeader"))}</b>${esc(san(windStory(w, RL)))}</p>
        <p class="weather-src">${esc(san(RL.wSrc(new Date().toLocaleString(uiLoc(), { dateStyle: "short", timeStyle: "short" }))))}</p>`;
