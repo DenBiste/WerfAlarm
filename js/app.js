@@ -700,6 +700,20 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       wCloud: c => `Bewolking: gemiddeld ${c}%`,
       wSrc: t => `Bron: Open-Meteo.com · locatie: middelpunt van de route · opgehaald op ${t}`,
       osmAttr: "© OpenStreetMap-bijdragers",
+      weatherStory: (tmin, tmax, cond, pp, psum, cloud, windV, gust, dir) => {
+        const temp = tmin === tmax ? `zo'n ${tmax}°C` : `tussen ${tmin}° en ${tmax}°C`;
+        const sky = cloud >= 70 ? `onder een grijze wolkendeken (${cloud}% bedekking)` : cloud <= 25 ? `onder een vrijwel blauwe lucht (${cloud}% bewolking)` : `met wisselende bewolking (${cloud}%)`;
+        const rain = pp >= 60 ? `Met ${pp}% kans op neerslag en zo'n ${psum} mm verwacht, is een regenjasje geen overbodige luxe.`
+          : pp >= 30 ? `Een bui is niet helemaal uitgesloten (${pp}% kans), maar het blijft grotendeels droog.`
+          : "Regen lijkt erg onwaarschijnlijk, het blijft de hele rit droog.";
+        const wind = windV < 12 ? `De wind waait amper ${windV} km/u en speelt nauwelijks een rol in hoe de rit aanvoelt.`
+          : `Reken op zo'n ${windV} km/u uit ${dir}, met rukwinden tot ${gust} km/u die je op open stukken zal voelen.`;
+        const tip = tmax <= 10 ? "Trek een extra laagje aan, want het blijft fris tijdens de hele rit."
+          : tmax >= 25 ? "Denk aan voldoende water, want de temperatuur loopt op richting warm."
+          : "Al bij al aangename, fietsvriendelijke temperaturen.";
+        return `Het wordt ${cond}, ${temp} ${sky}. ${rain} ${wind} ${tip}`;
+      },
+      hourlyHeader: "Uur per uur",
       windHeader: "De wind onderweg",
       rain60: " Grote kans op neerslag: neem een regenjasje mee.",
       rain30: " Een bui is niet uitgesloten; een windvestje kan geen kwaad.",
@@ -760,6 +774,20 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       wCloud: c => `Cloud cover: average ${c}%`,
       wSrc: t => `Source: Open-Meteo.com · location: midpoint of the route · retrieved on ${t}`,
       osmAttr: "© OpenStreetMap contributors",
+      weatherStory: (tmin, tmax, cond, pp, psum, cloud, windV, gust, dir) => {
+        const temp = tmin === tmax ? `around ${tmax}°C` : `between ${tmin}° and ${tmax}°C`;
+        const sky = cloud >= 70 ? `under a grey blanket of cloud (${cloud}% cover)` : cloud <= 25 ? `under largely blue skies (${cloud}% cloud)` : `with variable cloud cover (${cloud}%)`;
+        const rain = pp >= 60 ? `With a ${pp}% chance of rain and around ${psum} mm expected, a rain jacket isn't a bad idea.`
+          : pp >= 30 ? `A shower can't quite be ruled out (${pp}% chance), but it should mostly stay dry.`
+          : "Rain looks very unlikely, so it should stay dry for the whole ride.";
+        const wind = windV < 12 ? `The wind barely blows at ${windV} km/h and hardly plays a role in how the ride feels.`
+          : `Expect a steady ${windV} km/h from the ${dir}, with gusts up to ${gust} km/h you'll notice on exposed stretches.`;
+        const tip = tmax <= 10 ? "Pack an extra layer, it stays chilly for the whole ride."
+          : tmax >= 25 ? "Bring plenty of water, temperatures climb into warm territory."
+          : "All in all, pleasant, ride-friendly temperatures.";
+        return `It'll be ${cond}, ${temp} ${sky}. ${rain} ${wind} ${tip}`;
+      },
+      hourlyHeader: "Hour by hour",
       windHeader: "The wind along the way",
       rain60: " High chance of rain: pack a rain jacket.",
       rain30: " A shower can't be ruled out; a wind vest won't hurt.",
@@ -838,8 +866,13 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       let vx = 0, vy = 0;
       dirs.forEach((d, i) => { const rad = d * Math.PI / 180, w = winds[i] || .01; vx += Math.cos(rad) * w; vy += Math.sin(rad) * w; });
       let dir = Math.atan2(vy, vx) * 180 / Math.PI; if (dir < 0) dir += 360;
+      /* per-uur detail voor de grafische tijdlijn */
+      const hours = idx.map(i => ({
+        time: h.time[i], temp: h.temperature_2m[i], code: h.weather_code[i],
+        wind: h.wind_speed_10m[i], gust: h.wind_gusts_10m[i], dir: h.wind_direction_10m[i]
+      }));
       return {
-        date: target, isRideDate, hourly: true, rangeStart: startStr, rangeEnd: endStr,
+        date: target, isRideDate, hourly: true, rangeStart: startStr, rangeEnd: endStr, hours,
         tmax: Math.max(...temps), tmin: Math.min(...temps),
         wind: avg(winds), gust: Math.max(...gusts), dir,
         pp: Math.max(...pps), psum: precs.reduce((s, v) => s + v, 0),
@@ -912,6 +945,14 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const finale = legs.length && legs[legs.length - 1].c === "mee" ? RL.finMee
       : legs.length && legs[legs.length - 1].c === "tegen" ? RL.finTegen : "";
     return `${RL.windFrom(compassL(w.dir, RL), Math.round(w.wind))}${seg}${extra}. ${som}${finale}`;
+  }
+
+  /* Korte, gegevens-gedreven samenvatting van weer én wind tijdens de rit
+     (los van het gedetailleerde per-wegvak windverhaal hierboven/-onder). */
+  function weatherStory(w, RL) {
+    return RL.weatherStory(Math.round(w.tmin), Math.round(w.tmax), RL.wmo(w.code),
+      Math.round(w.pp ?? 0), (w.psum ?? 0).toFixed(1), Math.round(w.cloud),
+      Math.round(w.wind), Math.round(w.gust), compassL(w.dir, RL));
   }
 
   /* Gevarieerd karakterportret van een klim, in de gekozen rapporttaal. */
@@ -1321,6 +1362,38 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       doc.setFontSize(7.5);
       doc.text(san(RL.wSrc(new Date().toLocaleString(RL.locale, { dateStyle: "short", timeStyle: "short" }))), M + 5, y + 30 + extra);
       y += 38 + extra;
+
+      /* korte, gegevens-gedreven samenvatting van weer + wind */
+      doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...INKc);
+      const summary = doc.splitTextToSize(san(weatherStory(weather, RL)), CW);
+      const summaryH = summary.length * 4;
+      if (y + summaryH > 284) newPage();
+      doc.text(summary, M, y); y += summaryH + 5;
+
+      /* uur-per-uur tijdlijn: icoon, temperatuur & wind per uurvak van de rit */
+      if (weather.hourly && weather.hours && weather.hours.length) {
+        const hrs = weather.hours;
+        const minTileW = 20, perRow = Math.max(1, Math.min(hrs.length, Math.floor(CW / minTileW)));
+        const tileW = CW / perRow, tileH = 21, rows = Math.ceil(hrs.length / perRow);
+        if (y + 5 + rows * tileH > 282) newPage();
+        doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
+        doc.text(RL.hourlyHeader, M, y); y += 4.5;
+        hrs.forEach((hr, i) => {
+          const row = Math.floor(i / perRow), col = i % perRow;
+          const x = M + col * tileW, yy = y + row * tileH;
+          doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
+          doc.roundedRect(x + 1, yy, tileW - 2, tileH - 2.5, 2.5, 2.5, "FD");
+          drawWx(wxKind(hr.code), x + tileW / 2, yy + 5.5, 3.6);
+          doc.setFont("helvetica", "bold"); doc.setFontSize(7.5); doc.setTextColor(...MUTEDc);
+          doc.text(hr.time.slice(11, 16), x + tileW / 2, yy + 10.8, { align: "center" });
+          doc.setFontSize(8.5); doc.setTextColor(...INKc);
+          doc.text(`${Math.round(hr.temp)}°`, x + tileW / 2, yy + 14.8, { align: "center" });
+          doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...PINEc);
+          doc.text(`${Math.round(hr.wind)} km/u`, x + tileW / 2, yy + 18.4, { align: "center" });
+        });
+        y += rows * tileH + 5;
+      }
+
       /* de wind onderweg: waar tegen, waar mee, waar dwars */
       doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
       doc.text(RL.windHeader, M, y); y += 4.5;
@@ -1512,6 +1585,18 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     }
     const w = pageWeather;
     const wd = w.date.toLocaleDateString(uiLoc(), { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+    const hourStrip = (w.hourly && w.hours && w.hours.length)
+      ? `<h4 class="hour-strip-title">${esc(T("hourlyHeader"))}</h4>
+         <div class="hour-strip">${w.hours.map(hr => {
+           const rot = (hr.dir + 180) - 90;
+           return `<div class="hour-tile">
+             <span class="hour-time">${esc(hr.time.slice(11, 16))}</span>
+             <span class="hour-ico" aria-hidden="true">${wmoIcon(hr.code)}</span>
+             <span class="hour-temp">${Math.round(hr.temp)}°</span>
+             <span class="hour-wind"><span class="hour-arrow" aria-hidden="true" style="transform:rotate(${rot}deg)">➤</span>${Math.round(hr.wind)} km/u</span>
+           </div>`;
+         }).join("")}</div>`
+      : "";
     body.innerHTML =
       `<div class="weather-card">
          <div class="weather-head">
@@ -1523,6 +1608,8 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
          <p><span class="w-ico" aria-hidden="true">💨</span>${esc(san(RL.wWind(Math.round(w.wind), compassL(w.dir, RL), Math.round(w.gust))))}</p>
          <p><span class="w-ico" aria-hidden="true">☁️</span>${esc(san(RL.wCloud(Math.round(w.cloud))))}</p>
        </div>
+       <p class="weather-summary">${esc(san(weatherStory(w, RL)))}</p>
+       ${hourStrip}
        <p class="wind-par"><b>${esc(T("windHeader"))}</b>${esc(san(windStory(w, RL)))}</p>
        <p class="weather-src">${esc(san(RL.wSrc(new Date().toLocaleString(uiLoc(), { dateStyle: "short", timeStyle: "short" }))))}</p>`;
     syncWindArrows();

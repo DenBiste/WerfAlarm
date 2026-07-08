@@ -93,7 +93,7 @@ const I18N = (() => {
       climbPinTitle: (i, km) => `Klim ${i} — top op km ${km}`,
       windArrowTip: (v, dir) => `Wind: ${v} km/u uit ${dir}`,
       weerNoData: "De weersvoorspelling kon niet opgehaald worden. Raadpleeg je weerapp voor vertrek.",
-      windHeader: "De wind onderweg",
+      hourlyHeader: "Uur per uur", windHeader: "De wind onderweg",
       /* ---------- footer ---------- */
       footTag: "jouw verkenner op kop — werven, klimmen & weer",
       footSrc: `Bron: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (werven, enkel Vlaanderen) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (hoogte &amp; weer). Kaart © OpenStreetMap.`
@@ -168,7 +168,7 @@ const I18N = (() => {
       climbPinTitle: (i, km) => `Climb ${i} — summit at km ${km}`,
       windArrowTip: (v, dir) => `Wind: ${v} km/h from ${dir}`,
       weerNoData: "The weather forecast could not be retrieved. Check your weather app before departure.",
-      windHeader: "The wind along the way",
+      hourlyHeader: "Hour by hour", windHeader: "The wind along the way",
       footTag: "your scout up the road — roadworks, climbs & weather",
       footSrc: `Source: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD open data</a> (roadworks, Flanders only) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (elevation &amp; weather). Map © OpenStreetMap.`
     }
