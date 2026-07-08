@@ -333,6 +333,33 @@ const Geom = (() => {
     return best;
   }
 
+  /* Afstand (m) tussen twee [lat,lon]-punten (haversine). */
+  function haversine(a, b) {
+    const R = 6371000, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(b[0] - a[0]), dLon = toRad(b[1] - a[1]);
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  }
+
+  /* Als het omleidingspad `detourPts` de originele route al vroeger terug
+     raakt dan het geplande eindpunt `hi` (bv. een BRouter-suggestie die
+     verderop toevallig weer over je eigen track loopt), geeft dit het
+     eerste zo'n punt terug: {detourIdx, rawIdx}. Anders null. De eerste
+     `skipM` meter van beide paden worden overgeslagen om het triviale
+     beginpunt niet als "terugkeer" te herkennen. */
+  function earlyRejoin(detourPts, rawPts, lo, hi, skipM = 80, threshM = 20) {
+    let dAcc = 0, dStart = 0;
+    while (dStart < detourPts.length - 1 && dAcc < skipM) { dAcc += haversine(detourPts[dStart], detourPts[dStart + 1]); dStart++; }
+    let rAcc = 0, rStart = lo;
+    while (rStart < hi && rAcc < skipM) { rAcc += haversine(rawPts[rStart], rawPts[rStart + 1]); rStart++; }
+    for (let i = dStart; i < detourPts.length; i++) {
+      for (let j = rStart; j <= hi; j++) {
+        if (haversine(detourPts[i], rawPts[j]) <= threshM) return { detourIdx: i, rawIdx: j };
+      }
+    }
+    return null;
+  }
+
   return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs,
-           pathLength, geomCenterRadius, nearestIndex };
+           pathLength, geomCenterRadius, nearestIndex, earlyRejoin };
 })();
