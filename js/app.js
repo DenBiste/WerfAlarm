@@ -176,7 +176,7 @@
               startHour: $("starthour").value, endHour: $("endhour").value };
     refresh();
     $("run").disabled = false;
-    $("dlgpx").disabled = !list.length;
+    $("dlgpx").disabled = false;   // route (evt. herroutet) blijft downloadbaar, ook zonder resterende hinder
     $("report").disabled = false;
     const cacheNote = fromCache === route.tiles.length * 2 ? T("fromCache") : "";
     const forWho = modes.size === 3 ? "" : T("forUsers", modesLabelL(modes, repLang()));
@@ -289,7 +289,7 @@
 
   /* ---------------- GPX-export met waarschuwings-waypoints ---------------- */
   $("dlgpx").addEventListener("click", () => {
-    if (!route || !rawGpx || !lastResults.length) return;
+    if (!route) return;
     const wpts = lastResults.flatMap(r =>
       r.kms.map((km, i) => {
         const [lat, lon] = Geom.pointAtChain(route, km * 1000); // op jóuw track, waar je passeert
