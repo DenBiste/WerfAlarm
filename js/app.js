@@ -83,6 +83,7 @@
     $("run").disabled = false;
     $("status").textContent = T("statusReady");
     $("error").style.display = "none";
+    recalcRideTimes();
     $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>${T("emptyLoaded")}</div>`;
     initSections();   // hoogteprofiel + weer alvast opbouwen (async)
     document.getElementById("app").scrollIntoView({ behavior: "smooth" });
@@ -168,7 +169,8 @@
       .filter(r => relevantFor(r, modes))
       .filter(r => !onlyHard || isHardFor(r, modes));
     lastResults = list;
-    view = { list, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km" };
+    view = { list, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km",
+              startHour: $("starthour").value, endHour: $("endhour").value };
     refresh();
     $("run").disabled = false;
     $("dlgpx").disabled = !list.length;
@@ -179,6 +181,37 @@
     renderPageWeather();   // ritdatum kan gewijzigd zijn
     $("bar").firstElementChild.style.width = "100%";
   }
+
+  /* ---------------- startuur / einduur / snelheid: automatische berekening ----------------
+     Vult het ontbrekende veld aan zodra de andere twee gekend zijn, op basis van de
+     routelengte. Bij een bewerking wordt nooit het veld overschreven dat de gebruiker
+     net zelf intikt. */
+  const toDecHour = t => { if (!t) return null; const [h, m] = t.split(":").map(Number); return h + (m || 0) / 60; };
+  const fromDecHour = h => {
+    h = ((h % 24) + 24) % 24;
+    let hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+    if (mm === 60) { mm = 0; hh = (hh + 1) % 24; }
+    return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+  };
+  function recalcRideTimes(editedId) {
+    if (!route) return;
+    const sVal = $("starthour").value, eVal = $("endhour").value, spVal = $("speed").value;
+    const hasS = !!sVal, hasE = !!eVal, hasSp = spVal !== "" && parseFloat(spVal) > 0;
+    const km = route.km;
+    if (editedId !== "speed" && hasS && hasE) {
+      let dur = toDecHour(eVal) - toDecHour(sVal);
+      if (dur <= 0) dur += 24;   // rit over middernacht
+      $("speed").value = (km / dur).toFixed(1);
+    } else if (editedId !== "endhour" && hasS && hasSp) {
+      const dur = km / parseFloat(spVal);
+      $("endhour").value = fromDecHour(toDecHour(sVal) + dur);
+    } else if (editedId !== "starthour" && hasE && hasSp) {
+      const dur = km / parseFloat(spVal);
+      $("starthour").value = fromDecHour(toDecHour(eVal) - dur);
+    }
+  }
+  ["starthour", "endhour", "speed"].forEach(id =>
+    $(id).addEventListener("input", () => recalcRideTimes(id)));
 
   function firstCoord(g) { let c = g.coordinates; while (typeof c[0] !== "number") c = c[0]; return c; }
 
@@ -660,7 +693,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       climbTitle: (i, a, b) => `Klim ${i} — km ${a} -> km ${b}`,
       climbStats: (l, g, a, m) => `${l} km lang · ${g} hoogtemeters · gem. ${a}% · max. ${m}%`,
       noWeather: "De weersvoorspelling kon niet opgehaald worden (geen internetverbinding of dienst onbereikbaar). Raadpleeg je weerapp voor vertrek.",
-      forecastFor: (wd, ride, cond) => `Voorspelling voor ${wd}${ride ? " (je ritdatum)" : ""} — ${cond}`,
+      forecastFor: (wd, ride, cond, range) => `Voorspelling voor ${wd}${ride ? " (je ritdatum)" : ""}${range ? ` tussen ${range[0]} en ${range[1]}` : ""} — ${cond}`,
       wTemp: (a, b) => `Temperatuur: ${a}° tot ${b}°C`,
       wPrecip: (p, s) => `Neerslagkans: ${p}%  ·  neerslag: ${s} mm`,
       wWind: (v, dir, g) => `Wind: ${v} km/u uit ${dir} (rukwinden tot ${g} km/u)`,
@@ -720,7 +753,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       climbTitle: (i, a, b) => `Climb ${i} — km ${a} -> km ${b}`,
       climbStats: (l, g, a, m) => `${l} km long · ${g} m of gain · avg. ${a}% · max. ${m}%`,
       noWeather: "The weather forecast could not be retrieved (no internet connection or service unavailable). Check your weather app before departure.",
-      forecastFor: (wd, ride, cond) => `Forecast for ${wd}${ride ? " (your ride date)" : ""} — ${cond}`,
+      forecastFor: (wd, ride, cond, range) => `Forecast for ${wd}${ride ? " (your ride date)" : ""}${range ? ` between ${range[0]} and ${range[1]}` : ""} — ${cond}`,
       wTemp: (a, b) => `Temperature: ${a}° to ${b}°C`,
       wPrecip: (p, s) => `Chance of rain: ${p}%  ·  precipitation: ${s} mm`,
       wWind: (v, dir, g) => `Wind: ${v} km/h from ${dir} (gusts up to ${g} km/h)`,
@@ -764,10 +797,14 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     : c <= 82 ? "🌦️" : c <= 86 ? "🌨️" : "⛈️";
   const compassL = (deg, RL) => RL.compass[Math.round(deg / 22.5) % 16];
 
-  /* Dagvoorspelling van Open-Meteo voor het middelpunt van de route.
+  /* Weersvoorspelling van Open-Meteo voor het middelpunt van de route.
      We tonen de voorspelling voor de ritdatum als die binnen het
-     voorspellingsbereik (±15 dagen) valt, anders voor vandaag. */
-  async function fetchWeather(forDate) {
+     voorspellingsbereik (±15 dagen) valt, anders voor vandaag.
+     Zijn startuur én einduur gekend, dan halen we het UURlijkse weer op en
+     middelen/aggregeren we enkel over de uren dat je effectief onderweg bent
+     — nauwkeuriger dan de dagvoorspelling. Anders valt dit terug op het
+     daggemiddelde/-maximum zoals voorheen. */
+  async function fetchWeather(forDate, startStr, endStr) {
     const lats = route.pts.map(p => p[0]), lons = route.pts.map(p => p[1]);
     const lat = (Math.min(...lats) + Math.max(...lats)) / 2;
     const lon = (Math.min(...lons) + Math.max(...lons)) / 2;
@@ -775,6 +812,41 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     const ahead = Math.round((forDate - today) / 864e5);
     const target = (ahead >= 0 && ahead <= 15) ? forDate : today;
     const iso = target.toLocaleDateString("en-CA");
+    const isRideDate = target !== today || ahead === 0;
+
+    const startH = toDecHour(startStr), endH = toDecHour(endStr);
+    const hasRange = startH !== null && endH !== null && endH > startH;
+    if (hasRange) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
+        `&hourly=temperature_2m,precipitation_probability,precipitation,weather_code,` +
+        `wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover` +
+        `&timezone=Europe%2FBrussels&start_date=${iso}&end_date=${iso}`;
+      const r = await fetch(url);
+      if (!r.ok) throw new Error("weerdienst " + r.status);
+      const h = (await r.json()).hourly;
+      /* uurvakken die de rit (deels) overlappen */
+      const idx = [];
+      for (let i = 0; i < h.time.length; i++) if (i + 1 > startH && i < endH) idx.push(i);
+      if (!idx.length) idx.push(Math.min(h.time.length - 1, Math.max(0, Math.round(startH))));
+      const pick = arr => idx.map(i => arr[i]);
+      const temps = pick(h.temperature_2m), winds = pick(h.wind_speed_10m), gusts = pick(h.wind_gusts_10m);
+      const dirs = pick(h.wind_direction_10m), precs = pick(h.precipitation), pps = pick(h.precipitation_probability);
+      const clouds = pick(h.cloud_cover), codes = pick(h.weather_code);
+      const avg = a => a.reduce((s, v) => s + v, 0) / a.length;
+      /* vectorgemiddelde windrichting, gewogen met windsnelheid — voorkomt
+         onzin rond de 0°/360°-grens bij een gewone rekenkundige gemiddelde */
+      let vx = 0, vy = 0;
+      dirs.forEach((d, i) => { const rad = d * Math.PI / 180, w = winds[i] || .01; vx += Math.cos(rad) * w; vy += Math.sin(rad) * w; });
+      let dir = Math.atan2(vy, vx) * 180 / Math.PI; if (dir < 0) dir += 360;
+      return {
+        date: target, isRideDate, hourly: true, rangeStart: startStr, rangeEnd: endStr,
+        tmax: Math.max(...temps), tmin: Math.min(...temps),
+        wind: avg(winds), gust: Math.max(...gusts), dir,
+        pp: Math.max(...pps), psum: precs.reduce((s, v) => s + v, 0),
+        cloud: avg(clouds), code: Math.max(...codes)
+      };
+    }
+
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}` +
       `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,` +
       `wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant,cloud_cover_mean` +
@@ -783,7 +855,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     if (!r.ok) throw new Error("weerdienst " + r.status);
     const d = (await r.json()).daily;
     return {
-      date: target, isRideDate: target !== today || ahead === 0,
+      date: target, isRideDate, hourly: false,
       tmax: d.temperature_2m_max[0], tmin: d.temperature_2m_min[0],
       wind: d.wind_speed_10m_max[0], gust: d.wind_gusts_10m_max[0],
       dir: d.wind_direction_10m_dominant[0],
@@ -878,7 +950,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     let mapImg = null, profile = null, weather = null;
     try { mapImg = await buildMapImage(list, RL); } catch (e) { /* schematisch kaartje als vangnet */ }
     try { profile = await ensureProfile(); } catch (e) { profile = null; }
-    try { weather = await fetchWeather(view.rideDate); } catch (e) { weather = null; }
+    try { weather = await fetchWeather(view.rideDate, view.startHour, view.endHour); } catch (e) { weather = null; }
 
     const paintPage = () => { doc.setFillColor(...SANDc); doc.rect(0, 0, W, 297, "F"); };
     /* koptekstbalk = dennengroen met gestippeld waymark-spoor (zoals de site) */
@@ -1239,7 +1311,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       drawWx(wxKind(weather.code), M + CW - 14, y + 8.5, 6);
       const wd = weather.date.toLocaleDateString(RL.locale, { weekday: "long", day: "numeric", month: "long", year: "numeric" });
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(...INKc);
-      doc.text(doc.splitTextToSize(san(RL.forecastFor(wd, weather.isRideDate, RL.wmo(weather.code))), CW - 32), M + 5, y + 7);
+      doc.text(doc.splitTextToSize(san(RL.forecastFor(wd, weather.isRideDate, RL.wmo(weather.code), weather.hourly ? [weather.rangeStart, weather.rangeEnd] : null)), CW - 32), M + 5, y + 7);
       doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(...MUTEDc);
       /* mini-iconen vóór elke meetwaarde */
       icoThermo(M + 6.5, y + 17);    doc.text(san(col1[0]), M + 11, y + 18);
@@ -1428,7 +1500,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
   async function renderPageWeather() {
     const sec = document.getElementById("secWeather");
     if (!sec || !route) return;
-    try { pageWeather = await fetchWeather(currentRideDate()); } catch (e) { pageWeather = null; }
+    try { pageWeather = await fetchWeather(currentRideDate(), $("starthour").value, $("endhour").value); } catch (e) { pageWeather = null; }
     renderWeatherHtml();
   }
   function renderWeatherHtml() {
@@ -1444,7 +1516,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       `<div class="weather-card">
          <div class="weather-head">
            <span class="weather-ico" aria-hidden="true">${wmoIcon(w.code)}</span>
-           <h3>${esc(san(RL.forecastFor(wd, w.isRideDate, RL.wmo(w.code))))}</h3>
+           <h3>${esc(san(RL.forecastFor(wd, w.isRideDate, RL.wmo(w.code), w.hourly ? [w.rangeStart, w.rangeEnd] : null)))}</h3>
          </div>
          <p><span class="w-ico" aria-hidden="true">🌡️</span>${esc(san(RL.wTemp(Math.round(w.tmin), Math.round(w.tmax))))}</p>
          <p><span class="w-ico" aria-hidden="true">🌧️</span>${esc(san(RL.wPrecip(w.pp ?? "?", (w.psum ?? 0).toFixed(1))))}</p>
