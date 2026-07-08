@@ -523,7 +523,16 @@
       const detours = [];
       for (const rg of ranges) {
         const d = await Brouter.route(route.rawPts[rg.lo], route.rawPts[rg.hi], zone.lat, zone.lon, zone.radius);
-        detours.push({ lo: rg.lo, hi: rg.hi, pts: d.pts, eles: d.eles, lengthM: d.lengthM });
+        let pts = d.pts, eles = d.eles, hi = rg.hi;
+        /* raakt de omleiding je eigen track al vroeger terug dan het
+           geplande eindpunt, dan hervat de route daar i.p.v. verderop */
+        const rejoin = Geom.earlyRejoin(pts, route.rawPts, rg.lo, rg.hi);
+        if (rejoin) {
+          pts = pts.slice(0, rejoin.detourIdx + 1);
+          eles = eles ? eles.slice(0, rejoin.detourIdx + 1) : null;
+          hi = rejoin.rawIdx;
+        }
+        detours.push({ lo: rg.lo, hi, pts, eles, lengthM: Geom.pathLength(pts) });
       }
 
       let deltaKm = 0;

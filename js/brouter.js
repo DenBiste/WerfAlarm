@@ -8,11 +8,14 @@ const Brouter = (() => {
 
   /* Berekent een fietsroute tussen twee [lat,lon]-punten die de cirkel
      (nlat,nlon,radius in m) vermijdt. Geeft {pts, eles, lengthM} terug,
-     of gooit een Error als er geen route gevonden werd. */
+     of gooit een Error als er geen route gevonden werd.
+     Profiel "fastbike" i.p.v. "trekking": legt een fors hogere kostprijs
+     op onverharde wegen (grind/aarde), zodat de omleiding in de praktijk
+     enkel verharde wegen voorstelt. */
   async function route(fromPt, toPt, nlat, nlon, radius) {
     const lonlats = `${fromPt[1].toFixed(6)},${fromPt[0].toFixed(6)}|${toPt[1].toFixed(6)},${toPt[0].toFixed(6)}`;
     const nogos = `${nlon.toFixed(6)},${nlat.toFixed(6)},${Math.round(radius)}`;
-    const url = `${ENDPOINT}?lonlats=${lonlats}&nogos=${nogos}&profile=trekking&alternativeidx=0&format=gpx`;
+    const url = `${ENDPOINT}?lonlats=${lonlats}&nogos=${nogos}&profile=fastbike&alternativeidx=0&format=gpx`;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 20000);
     let r;
