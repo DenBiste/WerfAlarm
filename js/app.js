@@ -43,6 +43,7 @@
   const hinderLayer = L.layerGroup().addTo(map);   // werven (zones + stippen)
   const climbLayer  = L.layerGroup().addTo(map);   // klim-pins
   const windLayer   = L.layerGroup().addTo(map);   // windpijlen
+  const detourLayer = L.layerGroup().addTo(map);   // omleidingsvoorstel (tijdelijk)
 
   function drawRoute() {
     if (routeLayer) map.removeLayer(routeLayer);
@@ -74,6 +75,8 @@
     route.rawPts = pts;
     route.rawEles = eles;               // null als de GPX geen hoogtes bevat
     route.profile = undefined;          // wordt (lui) gebouwd voor het rapport
+    route.modified = false;             // nog geen omleiding overgenomen
+    detourLayer.clearLayers();
     drawRoute();
     $("strip").hidden = true;
     $("dlgpx").disabled = true;
@@ -300,7 +303,9 @@
                 (r.cons ? ` | ${String(r.cons).replace(/[;|]/g, " · ")}` : "")
         };
       }));
-    const out = GPX.exportWithWarnings(rawGpx, wpts);
+    const out = route.modified
+      ? GPX.buildGpx(route.rawPts, route.rawEles, route.name, wpts)
+      : GPX.exportWithWarnings(rawGpx, wpts);
     const blob = new Blob([out], { type: "application/gpx+xml" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -416,7 +421,11 @@
         `${r.owner ? ` · ${esc(r.owner)}` : ""}${r.dist > 10 ? ` · ${T("fromTrack", r.dist)}` : ` · ${T("onTrack")}`}` +
         `${multi ? `<br><b>${esc(T("passages", r.kms.length, kmList))}</b>` : ""}</div>
          ${consTxt ? `<div class="cons">${hard ? "<em>" : ""}${esc(consTxt)}${hard ? "</em>" : ""}</div>` : ""}
-         <span class="chip">${T("activeOn", dateStr)}</span>${hard ? `<span class="hardtag">${T("blockTag")}</span>` : ""}</div>`;
+         <span class="chip">${T("activeOn", dateStr)}</span>${hard ? `<span class="hardtag">${T("blockTag")}</span>` : ""}
+         <div class="alt-box">
+           <button type="button" class="btn-alt">${T("suggestAlt")}</button>
+           <div class="alt-result" hidden></div>
+         </div></div>`;
 
       const popup = `<b>km ${kmList} — ${esc(r.desc)}</b><br>${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}<br>${esc(consTxt)}`;
       /* de getroffen zone zelf, zoals op geopunt.be/hinder-in-kaart */
@@ -441,6 +450,10 @@
       };
       el.addEventListener("click", () => focus(false));
       cardFocus.push(focus);
+
+      const altBtn = el.querySelector(".btn-alt"), altResult = el.querySelector(".alt-result");
+      altBtn.addEventListener("click", ev => { ev.stopPropagation(); suggestAlternative(r, altBtn, altResult); });
+
       return el;
     };
 
@@ -471,6 +484,87 @@
     }
   }
 
+  /* ---------------- omleidingsvoorstel (BRouter) ----------------
+     Zoekt een fietsroute die de getroffen zone vermijdt tussen een punt
+     ruim vóór en ruim ná de werf, en toont die als voorstel op de kaart
+     vóórdat de gebruiker hem effectief overneemt. */
+  async function suggestAlternative(r, btn, resultBox) {
+    detourLayer.clearLayers();
+    /* een eerder open voorstel op een andere kaart sluiten */
+    document.querySelectorAll(".btn-alt[hidden]").forEach(b => { b.hidden = false; b.disabled = false; });
+    document.querySelectorAll(".alt-result").forEach(box => { if (box !== resultBox) { box.hidden = true; box.innerHTML = ""; } });
+
+    const origLabel = btn.textContent;
+    btn.disabled = true; btn.textContent = T("altLoading");
+    resultBox.hidden = true; resultBox.innerHTML = "";
+
+    try {
+      const zone = Geom.geomCenterRadius(r.geom);
+      if (!zone) throw new Error("geen zone-geometrie");
+      const bufferKm = Math.max(0.25, zone.radius / 1000 + 0.15);
+      const kmFrom = Math.max(0, Math.min(...r.kms) - bufferKm);
+      const kmTo = Math.min(route.km, Math.max(...r.kms) + bufferKm);
+      const fromLL = Geom.pointAtChain(route, kmFrom * 1000);
+      const toLL = Geom.pointAtChain(route, kmTo * 1000);
+      let lo = Geom.nearestIndex(route.rawPts, fromLL), hi = Geom.nearestIndex(route.rawPts, toLL);
+      if (lo > hi) [lo, hi] = [hi, lo];
+      if (hi - lo < 2) throw new Error("segment te kort");
+
+      const detour = await Brouter.route(route.rawPts[lo], route.rawPts[hi], zone.lat, zone.lon, zone.radius);
+      const bypassed = route.rawPts.slice(lo, hi + 1);
+      const deltaKm = (detour.lengthM - Geom.pathLength(bypassed)) / 1000;
+
+      L.polyline(bypassed, { color: "#5A6258", weight: 4, opacity: .85, dashArray: "2 7" }).addTo(detourLayer);
+      const detourLine = L.polyline(detour.pts, { color: "#FFD43B", weight: 5, opacity: .95, dashArray: "1 7" })
+        .addTo(detourLayer).bindTooltip(T("altPreviewTip"));
+      map.fitBounds(detourLine.getBounds().pad(0.4));
+
+      btn.hidden = true;
+      resultBox.hidden = false;
+      resultBox.innerHTML = `<p>${esc(T("altFound", deltaKm))}</p>
+        <div class="alt-actions">
+          <button type="button" class="btn-alt-accept">${T("altAccept")}</button>
+          <button type="button" class="btn-alt-discard">${T("altDiscard")}</button>
+        </div>`;
+      resultBox.querySelector(".btn-alt-accept").addEventListener("click", ev => {
+        ev.stopPropagation();
+        acceptAlternative(lo, hi, detour, resultBox);
+      });
+      resultBox.querySelector(".btn-alt-discard").addEventListener("click", ev => {
+        ev.stopPropagation();
+        detourLayer.clearLayers();
+        resultBox.hidden = true; resultBox.innerHTML = "";
+        btn.hidden = false; btn.disabled = false; btn.textContent = origLabel;
+      });
+    } catch (e) {
+      resultBox.hidden = false;
+      resultBox.innerHTML = `<p class="alt-error">${esc(T("altFail"))}</p>`;
+      btn.disabled = false; btn.textContent = origLabel;
+    }
+  }
+
+  /* Splitst de omleiding in de route, bouwt alle afgeleide routedata opnieuw
+     op en herhaalt de controle zodat werven, hoogteprofiel en strook
+     meteen kloppen met het nieuwe tracé. */
+  async function acceptAlternative(lo, hi, detour, resultBox) {
+    resultBox.innerHTML = `<p>${esc(T("altApplying"))}</p>`;
+    const newRawPts = [...route.rawPts.slice(0, lo + 1), ...detour.pts.slice(1, -1), ...route.rawPts.slice(hi)];
+    const newRawEles = (route.rawEles && detour.eles)
+      ? [...route.rawEles.slice(0, lo + 1), ...detour.eles.slice(1, -1), ...route.rawEles.slice(hi)]
+      : null;
+    const name = route.name;
+    route = Geom.buildRoute(newRawPts, name);
+    route.rawPts = newRawPts;
+    route.rawEles = newRawEles;
+    route.profile = undefined;
+    route.modified = true;
+    detourLayer.clearLayers();
+    drawRoute();
+    $("routeinfo").innerHTML = T("routeInfo", esc(route.name), route.km.toFixed(1), route.tiles.length);
+    $("footroute").textContent = T("footRoute", route.name, route.km.toFixed(1), newRawPts.length);
+    initSections();
+    await run();
+  }
 
   /* ---------------- deelbaar HTML-rapport ---------------- */
   function buildReportHtml() {
@@ -700,6 +794,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       wTemp: (a, b) => `Temperatuur: ${a}° tot ${b}°C`,
       wPrecip: (p, s) => `Neerslagkans: ${p}%  ·  neerslag: ${s} mm`,
       wWind: (v, dir, g) => `Wind: ${v} km/u uit ${dir} (rukwinden tot ${g} km/u)`,
+      kmh: "km/u",
       wCloud: c => `Bewolking: gemiddeld ${c}%`,
       wSrc: t => `Bron: Open-Meteo.com · locatie: middelpunt van de route · opgehaald op ${t}`,
       osmAttr: "© OpenStreetMap-bijdragers",
@@ -774,6 +869,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       wTemp: (a, b) => `Temperature: ${a}° to ${b}°C`,
       wPrecip: (p, s) => `Chance of rain: ${p}%  ·  precipitation: ${s} mm`,
       wWind: (v, dir, g) => `Wind: ${v} km/h from ${dir} (gusts up to ${g} km/h)`,
+      kmh: "km/h",
       wCloud: c => `Cloud cover: average ${c}%`,
       wSrc: t => `Source: Open-Meteo.com · location: midpoint of the route · retrieved on ${t}`,
       osmAttr: "© OpenStreetMap contributors",
@@ -1415,7 +1511,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
           /* pijl + windsnelheid als één centraal geheel positioneren, zodat de
              pijl nooit tegen de (afgeronde) tegelrand aan komt bij smalle tegels */
           doc.setFont("helvetica", "normal"); doc.setFontSize(6.5);
-          const windTxt = `${Math.round(hr.wind)} km/u`, windTxtW = doc.getTextWidth(windTxt);
+          const windTxt = `${Math.round(hr.wind)} ${RL.kmh}`, windTxtW = doc.getTextWidth(windTxt);
           const arrowR = 1.5, gap = 1.4, pairW = arrowR * 2 + gap + windTxtW;
           const pairX0 = x + tileW / 2 - pairW / 2;
           drawWindArrow(pairX0 + arrowR, yy + 17.3, hr.dir, arrowR);
@@ -1624,7 +1720,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
              <span class="hour-time">${esc(hr.time.slice(11, 16))}</span>
              <span class="hour-ico" aria-hidden="true">${wmoIcon(hr.code)}</span>
              <span class="hour-temp">${Math.round(hr.temp)}°</span>
-             <span class="hour-wind"><span class="hour-arrow" aria-hidden="true" style="transform:rotate(${rot}deg)">➤</span>${Math.round(hr.wind)} km/u</span>
+             <span class="hour-wind"><span class="hour-arrow" aria-hidden="true" style="transform:rotate(${rot}deg)">➤</span>${Math.round(hr.wind)} ${esc(RL.kmh)}</span>
            </div>`;
          }).join("")}</div>`
       : "";

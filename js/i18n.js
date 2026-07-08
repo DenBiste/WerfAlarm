@@ -82,6 +82,14 @@ const I18N = (() => {
       passages: (n, l) => `Je passeert hier ${n}×: km ${l}`,
       truncNote: "⚠ Minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.",
       dutchNote: "ℹ️ Omschrijvingen en gevolgen komen rechtstreeks uit het Vlaamse GIPOD-register en zijn enkel in het Nederlands beschikbaar.",
+      /* ---------- omleidingsvoorstel ---------- */
+      suggestAlt: "Alternatief voorstellen", altLoading: "Alternatief zoeken…",
+      altFound: km => km >= 0.05 ? `Alternatief gevonden: +${km.toFixed(1)} km omweg. Overnemen?`
+        : km <= -0.05 ? `Alternatief gevonden: ${Math.abs(km).toFixed(1)} km korter. Overnemen?`
+        : `Alternatief gevonden (vergelijkbare afstand). Overnemen?`,
+      altAccept: "Overnemen", altDiscard: "Negeren", altApplying: "Route aanpassen…",
+      altFail: "Kon geen alternatieve route vinden. Probeer het later opnieuw.",
+      altPreviewTip: "Voorgestelde omleiding",
       stripStart: "Start", stripFinish: "Aankomst",
       stripTick: (km, d) => `km ${km} — ${d}`, stripPass: (i, n) => ` (passage ${i}/${n})`, stripBlock: " (blokkade)",
       werfAria: (km, d) => `Werf op kilometer ${km}: ${d}`,
@@ -158,6 +166,13 @@ const I18N = (() => {
       passages: (n, l) => `You pass here ${n}×: km ${l}`,
       truncNote: "⚠ At least one sub-area hit the 1000-object limit; results may be incomplete.",
       dutchNote: "ℹ️ Descriptions and consequences come straight from the Flemish GIPOD register and are only available in Dutch.",
+      suggestAlt: "Suggest alternative", altLoading: "Finding alternative…",
+      altFound: km => km >= 0.05 ? `Alternative found: +${km.toFixed(1)} km detour. Apply it?`
+        : km <= -0.05 ? `Alternative found: ${Math.abs(km).toFixed(1)} km shorter. Apply it?`
+        : `Alternative found (similar distance). Apply it?`,
+      altAccept: "Accept", altDiscard: "Discard", altApplying: "Updating route…",
+      altFail: "Could not find an alternative route. Please try again later.",
+      altPreviewTip: "Suggested detour",
       stripStart: "Start", stripFinish: "Finish",
       stripTick: (km, d) => `km ${km} — ${d}`, stripPass: (i, n) => ` (passage ${i}/${n})`, stripBlock: " (blockage)",
       werfAria: (km, d) => `Roadwork at kilometre ${km}: ${d}`,

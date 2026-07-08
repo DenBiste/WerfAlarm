@@ -292,5 +292,47 @@ const Geom = (() => {
     return climbs;
   }
 
-  return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs };
+  /* Lengte (m) van een lijst [lat,lon]-punten, via de haversineformule. */
+  function pathLength(pts) {
+    const R = 6371000, toRad = d => d * Math.PI / 180;
+    let d = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const dLat = toRad(pts[i][0] - pts[i - 1][0]), dLon = toRad(pts[i][1] - pts[i - 1][1]);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(pts[i - 1][0])) * Math.cos(toRad(pts[i][0])) * Math.sin(dLon / 2) ** 2;
+      d += 2 * R * Math.asin(Math.sqrt(a));
+    }
+    return d;
+  }
+
+  /* Middelpunt + straal (m) die een GeoJSON-geometrie net omvat, plus marge —
+     gebruikt om een "vermijd deze zone"-cirkel aan een routeplanner te geven. */
+  function geomCenterRadius(g) {
+    const coords = geomPaths(g).flat();
+    if (!coords.length) return null;
+    const lats = coords.map(c => c[1]), lons = coords.map(c => c[0]);
+    const lat = (Math.min(...lats) + Math.max(...lats)) / 2, lon = (Math.min(...lons) + Math.max(...lons)) / 2;
+    const R = 6371000, toRad = d => d * Math.PI / 180;
+    let maxD = 0;
+    for (const [clon, clat] of coords) {
+      const dLat = toRad(clat - lat), dLon = toRad(clon - lon);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat)) * Math.cos(toRad(clat)) * Math.sin(dLon / 2) ** 2;
+      const d = 2 * R * Math.asin(Math.sqrt(a));
+      if (d > maxD) maxD = d;
+    }
+    return { lat, lon, radius: Math.max(25, maxD + 30) };
+  }
+
+  /* Index van het [lat,lon]-punt in `pts` dat het dichtst bij `latlon` ligt. */
+  function nearestIndex(pts, latlon) {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < pts.length; i++) {
+      const dLat = pts[i][0] - latlon[0], dLon = pts[i][1] - latlon[1];
+      const d = dLat * dLat + dLon * dLon;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs,
+           pathLength, geomCenterRadius, nearestIndex };
 })();
