@@ -346,20 +346,56 @@ const Geom = (() => {
      verderop toevallig weer over je eigen track loopt), geeft dit het
      eerste zo'n punt terug: {detourIdx, rawIdx}. Anders null. De eerste
      `skipM` meter van beide paden worden overgeslagen om het triviale
-     beginpunt niet als "terugkeer" te herkennen. */
-  function earlyRejoin(detourPts, rawPts, lo, hi, skipM = 80, threshM = 20) {
+     beginpunt niet als "terugkeer" te herkennen; `minRun` opeenvolgende
+     nabije punten zijn vereist zodat een toevallige, geïsoleerde nabijheid
+     (twee punten die toevallig dicht bij elkaar liggen zonder dat de route
+     er echt weer over loopt) niet als terugkeer telt. */
+  function earlyRejoin(detourPts, rawPts, lo, hi, skipM = 80, threshM = 20, minRun = 3) {
     let dAcc = 0, dStart = 0;
     while (dStart < detourPts.length - 1 && dAcc < skipM) { dAcc += haversine(detourPts[dStart], detourPts[dStart + 1]); dStart++; }
     let rAcc = 0, rStart = lo;
     while (rStart < hi && rAcc < skipM) { rAcc += haversine(rawPts[rStart], rawPts[rStart + 1]); rStart++; }
+    let run = 0, runStart = null;
     for (let i = dStart; i < detourPts.length; i++) {
+      let matchJ = -1;
       for (let j = rStart; j <= hi; j++) {
-        if (haversine(detourPts[i], rawPts[j]) <= threshM) return { detourIdx: i, rawIdx: j };
+        if (haversine(detourPts[i], rawPts[j]) <= threshM) { matchJ = j; break; }
       }
+      if (matchJ === -1) { run = 0; runStart = null; continue; }
+      if (run === 0) runStart = { detourIdx: i, rawIdx: matchJ };
+      run++;
+      if (run >= minRun) return runStart;
     }
     return null;
   }
 
+  /* Het spiegelbeeld van earlyRejoin: als BRouter vanaf het vaste startpunt
+     `lo` eerst een stuk TERUG moet rijden over je eigen track om de echte
+     aftakking te bereiken (de natuurlijke afslag ligt verder terug dan
+     `lo`), geeft dit het vroegste punt van die aftakking terug:
+     {detourIdx, rawIdx} met rawIdx < lo. Zo kan de rit die aftakking
+     gewoon meteen nemen i.p.v. eerst door te rijden tot `lo` en dan om
+     te keren. Geeft null als er geen terugkeer is (het normale geval).
+     `minRun` opeenvolgende nabije punten zijn vereist — anders zou een
+     enkel toevallig nabijgelegen punt vlak bij `lo` zelf (routepunten
+     liggen nu eenmaal dicht bij elkaar) al als "terugkeer" tellen. */
+  function earlyDeparture(detourPts, rawPts, lo, backWindowM = 2500, threshM = 20, minRun = 3) {
+    let acc = 0, start = lo;
+    while (start > 0 && acc < backWindowM) { acc += haversine(rawPts[start - 1], rawPts[start]); start--; }
+    if (start >= lo) return null;
+    let best = null, run = 0;
+    for (let i = 0; i < detourPts.length; i++) {
+      let matchJ = -1;
+      for (let j = start; j < lo; j++) {
+        if (haversine(detourPts[i], rawPts[j]) <= threshM) { matchJ = j; break; }
+      }
+      if (matchJ === -1) break;   // het omleidingspad heeft de terugkeer verlaten
+      run++;
+      if (run >= minRun) best = { detourIdx: i, rawIdx: matchJ };
+    }
+    return best;
+  }
+
   return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs,
-           pathLength, geomCenterRadius, nearestIndex, earlyRejoin };
+           pathLength, geomCenterRadius, nearestIndex, earlyRejoin, earlyDeparture };
 })();

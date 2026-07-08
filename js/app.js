@@ -523,16 +523,29 @@
       const detours = [];
       for (const rg of ranges) {
         const d = await Brouter.route(route.rawPts[rg.lo], route.rawPts[rg.hi], zone.lat, zone.lon, zone.radius);
-        let pts = d.pts, eles = d.eles, hi = rg.hi;
+        let pts = d.pts, eles = d.eles, lo = rg.lo, hi = rg.hi;
+
+        /* moet de omleiding vanaf `lo` eerst terug over je eigen track om
+           de echte aftakking te bereiken (die ligt dan verder terug dan
+           `lo`), dan neemt de route die aftakking meteen i.p.v. eerst door
+           te rijden tot `lo` en dan om te keren */
+        const minLo = detours.length ? detours[detours.length - 1].hi + 1 : 0;
+        const departure = Geom.earlyDeparture(pts, route.rawPts, lo);
+        if (departure && departure.rawIdx >= minLo) {
+          pts = pts.slice(departure.detourIdx);
+          eles = eles ? eles.slice(departure.detourIdx) : null;
+          lo = departure.rawIdx;
+        }
+
         /* raakt de omleiding je eigen track al vroeger terug dan het
            geplande eindpunt, dan hervat de route daar i.p.v. verderop */
-        const rejoin = Geom.earlyRejoin(pts, route.rawPts, rg.lo, rg.hi);
+        const rejoin = Geom.earlyRejoin(pts, route.rawPts, lo, hi);
         if (rejoin) {
           pts = pts.slice(0, rejoin.detourIdx + 1);
           eles = eles ? eles.slice(0, rejoin.detourIdx + 1) : null;
           hi = rejoin.rawIdx;
         }
-        detours.push({ lo: rg.lo, hi, pts, eles, lengthM: Geom.pathLength(pts) });
+        detours.push({ lo, hi, pts, eles, lengthM: Geom.pathLength(pts) });
       }
 
       let deltaKm = 0;
