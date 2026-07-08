@@ -1007,6 +1007,17 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       doc.setFillColor(...fill); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
       doc.lines([[r, r], [-r, r], [-r, -r], [r, -r]], cx, cy - r, [1, 1], "FD", true);
     };
+    /* linker accentbalk van een kaart, geclipt op de afgeronde kaartvorm zodat
+       de balk niet vierkant buiten de ronde hoeken van de kaart uitsteekt */
+    const cardAccent = (cx, cy, cw, ch, radius, fill) => {
+      doc.saveGraphicsState();
+      doc.roundedRect(cx, cy, cw, ch, radius, radius, null);
+      doc.clip();
+      doc.discardPath();
+      doc.setFillColor(...fill);
+      doc.rect(cx + .4, cy + .4, 2.4, ch - .8, "F");
+      doc.restoreGraphicsState();
+    };
     const newPage = () => { doc.addPage(); paintPage(); y = 18; };
 
     /* ---- kop ---- */
@@ -1102,7 +1113,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
 
       doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
       doc.roundedRect(M, y, CW, h, 3, 3, "FD");
-      doc.setFillColor(...(hard ? HARDc : DEEPc)); doc.rect(M + .4, y + .4, 2.4, h - .8, "F");
+      cardAccent(M, y, CW, h, 3, hard ? HARDc : DEEPc);
       /* km-badge */
       doc.setDrawColor(...INKc); doc.setFillColor(...PAPERc); doc.rect(M + 6, y + 4, 17, 11, "FD");
       doc.setFillColor(...PINEc); doc.rect(M + 6, y + 4, 17, 4, "F");
@@ -1249,7 +1260,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
         if (y + h > 282) newPage();
         doc.setFillColor(...PAPERc); doc.setDrawColor(...INKc); doc.setLineWidth(.5);
         doc.roundedRect(M, y, CW, h, 3, 3, "FD");
-        doc.setFillColor(...DEEPc); doc.rect(M + .4, y + .4, 2.4, h - .8, "F");
+        cardAccent(M, y, CW, h, 3, DEEPc);
         /* minigrafiek links */
         doc.setFillColor(...CHALKc); doc.setDrawColor(...INKc); doc.setLineWidth(.4);
         doc.rect(M + 5, y + 4, 48, h - 8, "FD");
@@ -1331,6 +1342,16 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       doc.line(cx - 1.8, cy + 1.1, cx + .9, cy + 1.1);
     };
     const icoCloudS = (cx, cy) => drawCloud(cx, cy, 1.7, GREYc);
+    /* windpijltje, gedraaid naar de richting waar de wind NAARTOE waait —
+       zelfde conventie als de ➤-pijlen op de kaart/pagina (rot = dir+180-90) */
+    const drawWindArrow = (cx, cy, dir, s) => {
+      const rad = ((dir + 180 - 90) * Math.PI) / 180;
+      const rot = (px, py) => [cx + px * Math.cos(rad) - py * Math.sin(rad), cy + px * Math.sin(rad) + py * Math.cos(rad)];
+      const [x1, y1] = rot(-s, 0), [x2, y2] = rot(s, 0);
+      const [hx1, hy1] = rot(s - s * .8, -s * .5), [hx2, hy2] = rot(s - s * .8, s * .5);
+      doc.setDrawColor(...ROUTEc); doc.setLineWidth(.55);
+      doc.line(x1, y1, x2, y2); doc.line(x2, y2, hx1, hy1); doc.line(x2, y2, hx2, hy2);
+    };
 
     /* ================= SECTIE: WEERSVOORSPELLING ================= */
     chapter(RL.secWeather, weatherIcon);
@@ -1377,7 +1398,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       if (weather.hourly && weather.hours && weather.hours.length) {
         const hrs = weather.hours;
         const minTileW = 20, perRow = Math.max(1, Math.min(hrs.length, Math.floor(CW / minTileW)));
-        const tileW = CW / perRow, tileH = 21, rows = Math.ceil(hrs.length / perRow);
+        const tileW = CW / perRow, tileH = 24, rows = Math.ceil(hrs.length / perRow);
         if (y + 5 + rows * tileH > 282) newPage();
         doc.setFont("helvetica", "bold"); doc.setFontSize(9.5); doc.setTextColor(...INKc);
         doc.text(RL.hourlyHeader, M, y); y += 4.5;
@@ -1391,8 +1412,15 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
           doc.text(hr.time.slice(11, 16), x + tileW / 2, yy + 10.8, { align: "center" });
           doc.setFontSize(8.5); doc.setTextColor(...INKc);
           doc.text(`${Math.round(hr.temp)}°`, x + tileW / 2, yy + 14.8, { align: "center" });
-          doc.setFont("helvetica", "normal"); doc.setFontSize(6.5); doc.setTextColor(...PINEc);
-          doc.text(`${Math.round(hr.wind)} km/u`, x + tileW / 2, yy + 18.4, { align: "center" });
+          /* pijl + windsnelheid als één centraal geheel positioneren, zodat de
+             pijl nooit tegen de (afgeronde) tegelrand aan komt bij smalle tegels */
+          doc.setFont("helvetica", "normal"); doc.setFontSize(6.5);
+          const windTxt = `${Math.round(hr.wind)} km/u`, windTxtW = doc.getTextWidth(windTxt);
+          const arrowR = 1.5, gap = 1.4, pairW = arrowR * 2 + gap + windTxtW;
+          const pairX0 = x + tileW / 2 - pairW / 2;
+          drawWindArrow(pairX0 + arrowR, yy + 17.3, hr.dir, arrowR);
+          doc.setTextColor(...PINEc);
+          doc.text(windTxt, pairX0 + arrowR * 2 + gap, yy + 18, { align: "left" });
         });
         y += rows * tileH + 5;
       }
