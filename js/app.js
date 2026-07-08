@@ -487,7 +487,12 @@
   /* ---------------- omleidingsvoorstel (BRouter) ----------------
      Zoekt een fietsroute die de getroffen zone vermijdt tussen een punt
      ruim vóór en ruim ná de werf, en toont die als voorstel op de kaart
-     vóórdat de gebruiker hem effectief overneemt. */
+     vóórdat de gebruiker hem effectief overneemt.
+     Een route kan dezelfde zone op meerdere, ver uit elkaar liggende
+     plekken kruisen (bv. een lus die dezelfde straat twee keer neemt).
+     Elke doortocht krijgt daarom zijn EIGEN lokale omleiding — anders zou
+     de omleiding van de eerste tot de laatste doortocht lopen en een groot,
+     onschuldig stuk route ertussenin overbodig meesturen. */
   async function suggestAlternative(r, btn, resultBox) {
     detourLayer.clearLayers();
     /* een eerder open voorstel op een andere kaart sluiten */
@@ -502,22 +507,37 @@
       const zone = Geom.geomCenterRadius(r.geom);
       if (!zone) throw new Error("geen zone-geometrie");
       const bufferKm = Math.max(0.25, zone.radius / 1000 + 0.15);
-      const kmFrom = Math.max(0, Math.min(...r.kms) - bufferKm);
-      const kmTo = Math.min(route.km, Math.max(...r.kms) + bufferKm);
-      const fromLL = Geom.pointAtChain(route, kmFrom * 1000);
-      const toLL = Geom.pointAtChain(route, kmTo * 1000);
-      let lo = Geom.nearestIndex(route.rawPts, fromLL), hi = Geom.nearestIndex(route.rawPts, toLL);
-      if (lo > hi) [lo, hi] = [hi, lo];
-      if (hi - lo < 2) throw new Error("segment te kort");
 
-      const detour = await Brouter.route(route.rawPts[lo], route.rawPts[hi], zone.lat, zone.lon, zone.radius);
-      const bypassed = route.rawPts.slice(lo, hi + 1);
-      const deltaKm = (detour.lengthM - Geom.pathLength(bypassed)) / 1000;
+      /* per doortocht een lokaal [lo,hi]-indexbereik; overlappende bereiken
+         (doortochten die dicht bij elkaar liggen) worden samengevoegd */
+      const ranges = [];
+      for (const km of [...r.kms].sort((a, b) => a - b)) {
+        const kmFrom = Math.max(0, km - bufferKm), kmTo = Math.min(route.km, km + bufferKm);
+        let lo = Geom.nearestIndex(route.rawPts, Geom.pointAtChain(route, kmFrom * 1000));
+        let hi = Geom.nearestIndex(route.rawPts, Geom.pointAtChain(route, kmTo * 1000));
+        if (lo > hi) [lo, hi] = [hi, lo];
+        if (hi - lo < 2) continue;
+        const last = ranges[ranges.length - 1];
+        if (last && lo <= last.hi) last.hi = Math.max(last.hi, hi);
+        else ranges.push({ lo, hi });
+      }
+      if (!ranges.length) throw new Error("geen bruikbaar segment");
 
-      L.polyline(bypassed, { color: "#5A6258", weight: 4, opacity: .85, dashArray: "2 7" }).addTo(detourLayer);
-      const detourLine = L.polyline(detour.pts, { color: "#FFD43B", weight: 5, opacity: .95, dashArray: "1 7" })
-        .addTo(detourLayer).bindTooltip(T("altPreviewTip"));
-      map.fitBounds(detourLine.getBounds().pad(0.4));
+      const detours = [];
+      for (const rg of ranges) {
+        const d = await Brouter.route(route.rawPts[rg.lo], route.rawPts[rg.hi], zone.lat, zone.lon, zone.radius);
+        detours.push({ lo: rg.lo, hi: rg.hi, pts: d.pts, eles: d.eles, lengthM: d.lengthM });
+      }
+
+      let deltaKm = 0;
+      for (const d of detours) {
+        const bypassed = route.rawPts.slice(d.lo, d.hi + 1);
+        deltaKm += (d.lengthM - Geom.pathLength(bypassed)) / 1000;
+        L.polyline(bypassed, { color: "#5A6258", weight: 4, opacity: .85, dashArray: "2 7" }).addTo(detourLayer);
+        L.polyline(d.pts, { color: "#FFD43B", weight: 5, opacity: .95, dashArray: "1 7" })
+          .addTo(detourLayer).bindTooltip(T("altPreviewTip"));
+      }
+      map.fitBounds(L.featureGroup(detourLayer.getLayers()).getBounds().pad(0.4));
 
       btn.hidden = true;
       resultBox.hidden = false;
@@ -528,7 +548,7 @@
         </div>`;
       resultBox.querySelector(".btn-alt-accept").addEventListener("click", ev => {
         ev.stopPropagation();
-        acceptAlternative(lo, hi, detour, resultBox);
+        acceptAlternative(detours, resultBox);
       });
       resultBox.querySelector(".btn-alt-discard").addEventListener("click", ev => {
         ev.stopPropagation();
@@ -543,15 +563,20 @@
     }
   }
 
-  /* Splitst de omleiding in de route, bouwt alle afgeleide routedata opnieuw
-     op en herhaalt de controle zodat werven, hoogteprofiel en strook
-     meteen kloppen met het nieuwe tracé. */
-  async function acceptAlternative(lo, hi, detour, resultBox) {
+  /* Splitst elke lokale omleiding in de route (van hoge naar lage index,
+     zodat eerder bepaalde indices geldig blijven), bouwt alle afgeleide
+     routedata opnieuw op en herhaalt de controle zodat werven,
+     hoogteprofiel en strook meteen kloppen met het nieuwe tracé. */
+  async function acceptAlternative(detours, resultBox) {
     resultBox.innerHTML = `<p>${esc(T("altApplying"))}</p>`;
-    const newRawPts = [...route.rawPts.slice(0, lo + 1), ...detour.pts.slice(1, -1), ...route.rawPts.slice(hi)];
-    const newRawEles = (route.rawEles && detour.eles)
-      ? [...route.rawEles.slice(0, lo + 1), ...detour.eles.slice(1, -1), ...route.rawEles.slice(hi)]
-      : null;
+    let newRawPts = route.rawPts.slice();
+    let newRawEles = route.rawEles ? route.rawEles.slice() : null;
+    for (const d of [...detours].sort((a, b) => b.lo - a.lo)) {
+      newRawPts = [...newRawPts.slice(0, d.lo + 1), ...d.pts.slice(1, -1), ...newRawPts.slice(d.hi)];
+      newRawEles = (newRawEles && d.eles)
+        ? [...newRawEles.slice(0, d.lo + 1), ...d.eles.slice(1, -1), ...newRawEles.slice(d.hi)]
+        : null;
+    }
     const name = route.name;
     route = Geom.buildRoute(newRawPts, name);
     route.rawPts = newRawPts;
