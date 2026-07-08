@@ -181,7 +181,7 @@
               startHour: $("starthour").value, endHour: $("endhour").value, fromCache };
     refresh();
     $("run").disabled = false;
-    $("dlgpx").disabled = !list.length;
+    $("dlgpx").disabled = false;   // route (evt. herroutet) blijft downloadbaar, ook zonder resterende hinder
     $("report").disabled = false;
     $("status").textContent = statusDoneText();
     renderPageWeather();   // ritdatum kan gewijzigd zijn
@@ -292,7 +292,7 @@
 
   /* ---------------- GPX-export met waarschuwings-waypoints ---------------- */
   $("dlgpx").addEventListener("click", () => {
-    if (!route || !rawGpx || !lastResults.length) return;
+    if (!route) return;
     const wpts = lastResults.flatMap(r =>
       r.kms.map((km, i) => {
         const [lat, lon] = Geom.pointAtChain(route, km * 1000); // op jóuw track, waar je passeert
