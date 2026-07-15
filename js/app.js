@@ -367,7 +367,10 @@
     for (const e of saved) {
       const chip = document.createElement("span"); chip.className = "saved-chip";
       const load = document.createElement("button"); load.type = "button"; load.className = "saved-load";
-      load.innerHTML = `${esc(e.name)} <small>· ${e.km} km</small>`;
+      load.textContent = `${e.name} `;
+      const small = document.createElement("small");
+      small.textContent = `· ${e.km} km`;
+      load.appendChild(small);
       load.addEventListener("click", () => {
         try {
           restoreRoute(e.name, Share.decodePoints(e.p), e.e || null, e.set, true);
