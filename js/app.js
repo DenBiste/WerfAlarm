@@ -121,6 +121,11 @@
   /* ---------------- controle uitvoeren ---------------- */
   $("ridedate").valueAsDate = new Date();
   $("run").addEventListener("click", run);
+  function statusDoneText() {
+    const cacheNote = view.fromCache === route.tiles.length * 2 ? T("fromCache") : "";
+    const forWho = view.modes.size === 3 ? "" : T("forUsers", modesLabelL(view.modes, repLang()));
+    return T("statusDone", view.list.length, view.onlyHard, forWho, view.rideDate.toLocaleDateString(uiLoc()), cacheNote);
+  }
   async function run() {
     $("run").disabled = true;
     $("dlgpx").disabled = true; $("report").disabled = true;
@@ -183,14 +188,12 @@
       .filter(r => !onlyHard || isHardFor(r, modes));
     lastResults = list;
     view = { list, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km",
-              startHour: $("starthour").value, endHour: $("endhour").value };
+              startHour: $("starthour").value, endHour: $("endhour").value, fromCache };
     refresh();
     $("run").disabled = false;
     $("dlgpx").disabled = false;   // route (evt. herroutet) blijft downloadbaar, ook zonder resterende hinder
     $("report").disabled = false;
-    const cacheNote = fromCache === route.tiles.length * 2 ? T("fromCache") : "";
-    const forWho = modes.size === 3 ? "" : T("forUsers", modesLabelL(modes, repLang()));
-    $("status").textContent = T("statusDone", list.length, onlyHard, forWho, rideDate.toLocaleDateString(uiLoc()), cacheNote);
+    $("status").textContent = statusDoneText();
     renderPageWeather();   // ritdatum kan gewijzigd zijn
     $("bar").firstElementChild.style.width = "100%";
   }
@@ -1901,7 +1904,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       renderPageProfile();
       renderWeatherHtml();
     }
-    if (view) refresh();
+    if (view) { refresh(); $("status").textContent = statusDoneText(); }
     else $("status").textContent = route ? T("statusReady") : T("statusLoadFirst");
     renderSavedRoutes();   // ✕-tooltips in de nieuwe taal
   });
