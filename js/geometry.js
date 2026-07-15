@@ -397,5 +397,5 @@ const Geom = (() => {
   }
 
   return { buildRoute, expandGrid, analyzeGeom, pointAtChain, buildProfile, findClimbs,
-           pathLength, geomCenterRadius, nearestIndex, earlyRejoin, earlyDeparture };
+           pathLength, geomCenterRadius, nearestIndex, earlyRejoin, earlyDeparture, simplify };
 })();
