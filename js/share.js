@@ -67,6 +67,20 @@ const Share = (() => {
     catch (e) { /* opslag niet beschikbaar */ }
   }
 
+  /* Werk een bestaande route bij zonder de volgorde te wijzigen (save()
+     zet de route bovenaan — dat is ongewenst voor bv. een bijgewerkte
+     controle-vingerafdruk). */
+  function update(name, patch) {
+    try {
+      const cur = list();
+      const i = cur.findIndex(x => x.name === name);
+      if (i === -1) return false;
+      cur[i] = { ...cur[i], ...patch };
+      localStorage.setItem(KEY, JSON.stringify(cur));
+      return true;
+    } catch (e) { return false; }
+  }
+
   /* ---------------- deelbare link ---------------- */
   /* o: {name, p, d, sh, eh, sp, rg, m, oh} — p is al gecodeerd */
   function buildLink(o) {
@@ -105,5 +119,5 @@ const Share = (() => {
     } catch (e) { return null; }
   }
 
-  return { encodePoints, decodePoints, list, save, remove, buildLink, parseLink };
+  return { encodePoints, decodePoints, list, save, remove, update, buildLink, parseLink };
 })();
