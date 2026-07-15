@@ -126,54 +126,34 @@
     const forWho = view.modes.size === 3 ? "" : T("forUsers", modesLabelL(view.modes, repLang()));
     return T("statusDone", view.list.length, view.onlyHard, forWho, view.rideDate.toLocaleDateString(uiLoc()), cacheNote);
   }
-  async function run() {
-    $("run").disabled = true;
-    $("dlgpx").disabled = true; $("report").disabled = true;
-    $("error").style.display = "none";
-    clearMarkers();
-
-    const rideDate = new Date($("ridedate").value || Date.now()); rideDate.setHours(12);
-    const onlyHard = $("onlyhard").checked;
-    const modes = getModes();
-    const v = parseInt($("range").value, 10);
-    const range = isNaN(v) ? 100 : Math.max(0, Math.min(250, v));
-    $("range").value = range;
+  /* De volledige controlepijplijn (GIPOD bevragen → filteren op weg-
+     gebruikers/blokkades → datumfilter → dedupliceren), losgekoppeld van
+     de UI zodat ook de achtergrondwacht op bewaarde routes ze kan
+     gebruiken. Geeft naast de lijst ook `keys` terug: de stabiele sleutels
+     van álle actieve records vóór deduplicatie — de vingerafdruk waarmee
+     een latere controle "nieuwe hinder" kan herkennen. */
+  async function queryDisruptions(rt, rideDate, modes, onlyHard, range, onProgress) {
     const thresh = range === 0 ? 5 : range;   // bij 0 m: 5 m tolerantie voor gps-/tekenruis
-    Geom.expandGrid(route, 1 + Math.ceil(thresh / 250));
-
+    Geom.expandGrid(rt, 1 + Math.ceil(thresh / 250));
     const seen = new Map();
-    const setP = (d, t) => {
-      $("bar").firstElementChild.style.width = (100 * d / t) + "%";
-      $("status").textContent = T("statusQuery", d, t);
-    };
-    setP(0, 1);
-
-    let truncated, fromCache;
-    try {
-      ({ truncated, fromCache } = await GIPOD.query(route.tiles, (f, col) => {
-        const s = GIPOD.summarize(f.properties || {}, col);
-        if (!relevantFor(s, modes)) return;   // filter tijdens de berekening: andere weggebruikers overslaan
-        if (onlyHard && !isHardFor(s, modes)) return;  // enkel blokkades voor deze weggebruikers
-        const res = Geom.analyzeGeom(route, f.geometry, thresh);
-        if (!res) return;
-        const key = col + "|" + (s.id || s.desc + s.start);
-        const kms = res.kms.map(m => m / 1000);
-        const rec = seen.get(key);
-        if (!rec) {
-          const [lon, lat] = firstCoord(f.geometry);
-          seen.set(key, { ...s, dist: Math.round(res.dist), kms, km: kms[0], lat, lon, geom: f.geometry });
-        } else {
-          rec.kms = mergeKms(rec.kms, kms);
-          rec.km = rec.kms[0];
-          if (res.dist < rec.dist) rec.dist = Math.round(res.dist);
-        }
-      }, setP));
-    } catch (e) {
-      $("error").style.display = "block";
-      $("error").innerHTML = T("gipodFailHtml") + ` <span class="note">(${esc(e.message)})</span>`;
-      $("run").disabled = false; $("status").textContent = T("statusFail");
-      return;
-    }
+    const { truncated, fromCache } = await GIPOD.query(rt.tiles, (f, col) => {
+      const s = GIPOD.summarize(f.properties || {}, col);
+      if (!relevantFor(s, modes)) return;   // filter tijdens de berekening: andere weggebruikers overslaan
+      if (onlyHard && !isHardFor(s, modes)) return;  // enkel blokkades voor deze weggebruikers
+      const res = Geom.analyzeGeom(rt, f.geometry, thresh);
+      if (!res) return;
+      const key = col + "|" + (s.id || s.desc + s.start);
+      const kms = res.kms.map(m => m / 1000);
+      const rec = seen.get(key);
+      if (!rec) {
+        const [lon, lat] = firstCoord(f.geometry);
+        seen.set(key, { ...s, key, dist: Math.round(res.dist), kms, km: kms[0], lat, lon, geom: f.geometry });
+      } else {
+        rec.kms = mergeKms(rec.kms, kms);
+        rec.km = rec.kms[0];
+        if (res.dist < rec.dist) rec.dist = Math.round(res.dist);
+      }
+    }, onProgress || (() => {}));
 
     /* enkel hinder die actief is op de gekozen ritdatum */
     const active = [];
@@ -186,9 +166,40 @@
     const list = dedupe(active)
       .filter(r => relevantFor(r, modes))
       .filter(r => !onlyHard || isHardFor(r, modes));
+    return { list, keys: active.map(r => r.key), truncated, fromCache };
+  }
+
+  async function run() {
+    $("run").disabled = true;
+    $("dlgpx").disabled = true; $("report").disabled = true;
+    $("error").style.display = "none";
+    clearMarkers();
+
+    const rideDate = new Date($("ridedate").value || Date.now()); rideDate.setHours(12);
+    const onlyHard = $("onlyhard").checked;
+    const modes = getModes();
+    const v = parseInt($("range").value, 10);
+    const range = isNaN(v) ? 100 : Math.max(0, Math.min(250, v));
+    $("range").value = range;
+
+    const setP = (d, t) => {
+      $("bar").firstElementChild.style.width = (100 * d / t) + "%";
+      $("status").textContent = T("statusQuery", d, t);
+    };
+    setP(0, 1);
+
+    let list, keys, truncated, fromCache;
+    try {
+      ({ list, keys, truncated, fromCache } = await queryDisruptions(route, rideDate, modes, onlyHard, range, setP));
+    } catch (e) {
+      $("error").style.display = "block";
+      $("error").innerHTML = T("gipodFailHtml") + ` <span class="note">(${esc(e.message)})</span>`;
+      $("run").disabled = false; $("status").textContent = T("statusFail");
+      return;
+    }
     lastResults = list;
-    view = { list, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km",
-              startHour: $("starthour").value, endHour: $("endhour").value, fromCache };
+    view = { list, keys, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km",
+              startHour: $("starthour").value, endHour: $("endhour").value, fromCache, routeRef: route };
     refresh();
     $("run").disabled = false;
     $("dlgpx").disabled = false;   // route (evt. herroutet) blijft downloadbaar, ook zonder resterende hinder
@@ -359,6 +370,10 @@
     if (autoRun) await run();
   }
 
+  /* Achtergrondwacht: naam → aantal nieuwe hinder(s) sinds de laatste
+     controle van die bewaarde route. Gevuld door watchSavedRoutes(). */
+  const watchAlerts = {};
+
   function renderSavedRoutes() {
     const bar = $("savedbar"), box = $("savedchips");
     const saved = Share.list();
@@ -367,17 +382,26 @@
     for (const e of saved) {
       const chip = document.createElement("span"); chip.className = "saved-chip";
       const load = document.createElement("button"); load.type = "button"; load.className = "saved-load";
-      load.innerHTML = `${esc(e.name)} <small>· ${e.km} km</small>`;
-      load.addEventListener("click", () => {
+      const alerts = watchAlerts[e.name];
+      load.innerHTML = `${esc(e.name)} <small>· ${e.km} km</small>` +
+        (alerts ? `<span class="chip-badge" title="${esc(T("watchBadgeTitle", alerts))}">⚠ ${alerts}</span>` : "");
+      load.addEventListener("click", async () => {
         try {
-          restoreRoute(e.name, Share.decodePoints(e.p), e.e || null, e.set, true);
+          await restoreRoute(e.name, Share.decodePoints(e.p), e.e || null, e.set, true);
+          /* de gebruiker heeft de actuele toestand nu gezien: vingerafdruk
+             bijwerken en de waarschuwing doven */
+          if (view && view.routeRef === route && view.keys) {
+            Share.update(e.name, { chk: { keys: view.keys, at: Date.now() } });
+            delete watchAlerts[e.name];
+            renderSavedRoutes();
+          }
         } catch (err) {
           Share.remove(e.name); renderSavedRoutes();   // corrupte invoer: opruimen
         }
       });
       const del = document.createElement("button"); del.type = "button"; del.className = "saved-del";
       del.title = T("delSavedTitle"); del.textContent = "✕";
-      del.addEventListener("click", () => { Share.remove(e.name); renderSavedRoutes(); });
+      del.addEventListener("click", () => { Share.remove(e.name); delete watchAlerts[e.name]; renderSavedRoutes(); });
       chip.append(load, del);
       box.appendChild(chip);
     }
@@ -389,11 +413,48 @@
       name: route.name, km: +route.km.toFixed(1), savedAt: Date.now(),
       p: Share.encodePoints(route.rawPts),
       e: route.rawEles ? route.rawEles.map(v => v == null ? null : Math.round(v)) : null,
-      set: currentSettings()
+      set: currentSettings(),
+      /* vingerafdruk van de laatst geziene controle, als die bij deze route hoort */
+      chk: (view && view.routeRef === route && view.keys) ? { keys: view.keys, at: Date.now() } : null
     });
     $("status").textContent = T(ok ? "savedOk" : "savedFail");
+    delete watchAlerts[route.name];
     renderSavedRoutes();
   });
+
+  /* Stille hercontrole van bewaarde routes met een ritdatum die nog moet
+     komen: is er hinder bijgekomen sinds de gebruiker de route voor het
+     laatst bekeek, dan verschijnt een ⚠-badge op de chip. De vingerafdruk
+     zelf wordt hier NIET bijgewerkt — dat gebeurt pas wanneer de gebruiker
+     de route effectief opent en de nieuwe toestand ziet. */
+  async function watchSavedRoutes() {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const candidates = Share.list()
+      .filter(e => e.set && e.set.d && new Date(e.set.d) >= today)
+      .slice(0, 4);   // wees zuinig op de GIPOD-dienst
+    let changed = false;
+    for (const e of candidates) {
+      try {
+        const pts = Share.decodePoints(e.p);
+        const rt = Geom.buildRoute(pts, e.name);
+        const rideDate = new Date(e.set.d); rideDate.setHours(12);
+        const chosen = new Set(String(e.set.m || "").split(",").filter(Boolean));
+        const modes = chosen.size ? chosen : new Set(["bike", "ped", "motor"]);
+        const v = parseInt(e.set.rg, 10);
+        const range = isNaN(v) ? 100 : Math.max(0, Math.min(250, v));
+        const { keys } = await queryDisruptions(rt, rideDate, modes, !!e.set.oh, range);
+        if (!e.chk || !e.chk.keys) {
+          /* nog geen referentiepunt: nu stil vastleggen, zonder alarm */
+          Share.update(e.name, { chk: { keys, at: Date.now() } });
+        } else {
+          const base = new Set(e.chk.keys);
+          const fresh = keys.filter(k => !base.has(k)).length;
+          if (fresh) { watchAlerts[e.name] = fresh; changed = true; }
+        }
+      } catch (err) { /* stil: de wacht is best-effort */ }
+    }
+    if (changed) renderSavedRoutes();
+  }
 
   $("sharelink").addEventListener("click", async () => {
     if (!route) return;
@@ -1941,5 +2002,9 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     renderSavedRoutes();
     const shared = Share.parseLink();
     if (shared) restoreRoute(shared.name || T("sharedName"), shared.pts, null, shared.set, true);
+    /* de wacht niet parallel met een gedeelde-linkcontrole laten lopen:
+       applyRoute() leegt de GIPOD-cache en zou de wachtbevraging kunnen
+       doorkruisen */
+    else watchSavedRoutes();
   });
 })();

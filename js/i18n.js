@@ -67,6 +67,7 @@ const I18N = (() => {
       linkCopyManual: "Kopieer deze link:",
       delSavedTitle: "Verwijder uit bewaarde routes",
       sharedName: "Gedeelde route",
+      watchBadgeTitle: n => `${n} nieuwe hinder(s) op deze route sinds je laatste controle — klik om te herbekijken`,
       /* ---------- lagen ---------- */
       layersLbl: "Kaartlagen — combineer vrij:",
       layBlocks: "🚧 Blokkades & hinder", layProfile: "⛰️ Hoogteprofiel", layWeather: "🌤️ Weer & wind",
@@ -164,6 +165,7 @@ const I18N = (() => {
       linkCopyManual: "Copy this link:",
       delSavedTitle: "Remove from saved routes",
       sharedName: "Shared route",
+      watchBadgeTitle: n => `${n} new disruption(s) on this route since your last check — click to review`,
       layersLbl: "Map layers — combine freely:",
       layBlocks: "🚧 Blockages & disruptions", layProfile: "⛰️ Elevation profile", layWeather: "🌤️ Weather & wind",
       statusLoadFirst: "Load a GPX file first.", statusReady: "Ready to check.",
