@@ -383,8 +383,17 @@
       const chip = document.createElement("span"); chip.className = "saved-chip";
       const load = document.createElement("button"); load.type = "button"; load.className = "saved-load";
       const alerts = watchAlerts[e.name];
-      load.innerHTML = `${esc(e.name)} <small>· ${e.km} km</small>` +
-        (alerts ? `<span class="chip-badge" title="${esc(T("watchBadgeTitle", alerts))}">⚠ ${alerts}</span>` : "");
+      load.textContent = `${e.name} `;
+      const kmSmall = document.createElement("small");
+      kmSmall.textContent = `· ${e.km} km`;
+      load.appendChild(kmSmall);
+      if (alerts) {
+        const badge = document.createElement("span");
+        badge.className = "chip-badge";
+        badge.title = T("watchBadgeTitle", alerts);
+        badge.textContent = `⚠ ${alerts}`;
+        load.appendChild(badge);
+      }
       load.addEventListener("click", async () => {
         try {
           await restoreRoute(e.name, Share.decodePoints(e.p), e.e || null, e.set, true);
