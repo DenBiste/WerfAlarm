@@ -57,6 +57,35 @@
   function clearMarkers() { hinderLayer.clearLayers(); markers = []; }
 
   /* ---------------- GPX laden ---------------- */
+  /* Gemeenschappelijk vervolg van GPX-laden en route-herstel (bewaard/
+     gedeeld): bouwt het route-object en zet alle UI-status. `modified`
+     bepaalt of de GPX-export later het originele bestand hergebruikt of
+     de track opnieuw opbouwt uit de punten. */
+  function applyRoute(pts, eles, name, modified) {
+    GIPOD.clearCache();                 // nieuwe route = verse data
+    lastResults = [];
+    route = Geom.buildRoute(pts, name);
+    route.rawPts = pts;
+    route.rawEles = eles;               // null als er geen hoogtes zijn
+    route.profile = undefined;          // wordt (lui) gebouwd voor het rapport
+    route.modified = modified;
+    detourLayer.clearLayers();
+    drawRoute();
+    $("strip").hidden = true;
+    $("dlgpx").disabled = true;
+    $("report").disabled = true;
+    $("saveroute").disabled = false;
+    $("sharelink").disabled = false;
+    $("routeinfo").innerHTML = T("routeInfo", esc(route.name), route.km.toFixed(1), route.tiles.length);
+    $("footroute").textContent = T("footRoute", route.name, route.km.toFixed(1), pts.length);
+    $("run").disabled = false;
+    $("status").textContent = T("statusReady");
+    $("error").style.display = "none";
+    recalcRideTimes();
+    $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>${T("emptyLoaded")}</div>`;
+    initSections();   // hoogteprofiel + weer alvast opbouwen (async)
+  }
+
   async function loadFile(file) {
     let text, pts, eles, name;
     try {
@@ -69,26 +98,7 @@
     }
     /* vanaf hier is het bestand geldig; UI-fouten tonen we niet als GPX-fout */
     rawGpx = text;
-    GIPOD.clearCache();                 // nieuwe route = verse data
-    lastResults = [];
-    route = Geom.buildRoute(pts, name || file.name.replace(/\.gpx$/i, ""));
-    route.rawPts = pts;
-    route.rawEles = eles;               // null als de GPX geen hoogtes bevat
-    route.profile = undefined;          // wordt (lui) gebouwd voor het rapport
-    route.modified = false;             // nog geen omleiding overgenomen
-    detourLayer.clearLayers();
-    drawRoute();
-    $("strip").hidden = true;
-    $("dlgpx").disabled = true;
-    $("report").disabled = true;
-    $("routeinfo").innerHTML = T("routeInfo", esc(route.name), route.km.toFixed(1), route.tiles.length);
-    $("footroute").textContent = T("footRoute", route.name, route.km.toFixed(1), pts.length);
-    $("run").disabled = false;
-    $("status").textContent = T("statusReady");
-    $("error").style.display = "none";
-    recalcRideTimes();
-    $("out").innerHTML = `<div id="empty" class="empty"><span class="empty-icon">✅</span>${T("emptyLoaded")}</div>`;
-    initSections();   // hoogteprofiel + weer alvast opbouwen (async)
+    applyRoute(pts, eles, name || file.name.replace(/\.gpx$/i, ""), false);
     document.getElementById("app").scrollIntoView({ behavior: "smooth" });
   }
 
@@ -309,6 +319,96 @@
     a.download = route.name.replace(/[^\w\- ]+/g, "").trim().replace(/ +/g, "-") + "-routescout.gpx";
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+
+  /* ---------------- route bewaren & delen ----------------
+     Bewaren: in localStorage, zodat een route (met instellingen en
+     eventuele overgenomen omleidingen) niet telkens opnieuw geüpload
+     hoeft te worden. Delen: de route zit gecomprimeerd in het URL-
+     fragment — geen server nodig; wie de link opent krijgt de route
+     geladen en de controle draait meteen met verse GIPOD-data. */
+  const currentSettings = () => ({
+    d: $("ridedate").value, sh: $("starthour").value, eh: $("endhour").value,
+    sp: $("speed").value, rg: $("range").value,
+    m: [...getModes()].join(","), oh: $("onlyhard").checked ? 1 : 0
+  });
+
+  function applySettings(s) {
+    if (!s) return;
+    if (s.d) $("ridedate").value = s.d;
+    $("starthour").value = s.sh || "";
+    $("endhour").value = s.eh || "";
+    $("speed").value = s.sp || "";
+    if (s.rg != null && s.rg !== "") $("range").value = s.rg;
+    const chosen = new Set(String(s.m || "").split(",").filter(Boolean));
+    if (chosen.size) {
+      modeBtns.forEach(b => { if (b.dataset.m !== "all") b.setAttribute("aria-pressed", String(chosen.has(b.dataset.m))); });
+      syncAllBtn();
+    }
+    $("onlyhard").checked = !!s.oh;
+  }
+
+  async function restoreRoute(name, pts, eles, s, autoRun) {
+    rawGpx = "";   // geen origineel bestand meer: de export bouwt de GPX opnieuw op
+    applySettings(s);
+    applyRoute(pts, eles, name, true);
+    document.getElementById("app").scrollIntoView({ behavior: "smooth" });
+    if (autoRun) await run();
+  }
+
+  function renderSavedRoutes() {
+    const bar = $("savedbar"), box = $("savedchips");
+    const saved = Share.list();
+    bar.hidden = !saved.length;
+    box.innerHTML = "";
+    for (const e of saved) {
+      const chip = document.createElement("span"); chip.className = "saved-chip";
+      const load = document.createElement("button"); load.type = "button"; load.className = "saved-load";
+      load.innerHTML = `${esc(e.name)} <small>· ${e.km} km</small>`;
+      load.addEventListener("click", () => {
+        try {
+          restoreRoute(e.name, Share.decodePoints(e.p), e.e || null, e.set, true);
+        } catch (err) {
+          Share.remove(e.name); renderSavedRoutes();   // corrupte invoer: opruimen
+        }
+      });
+      const del = document.createElement("button"); del.type = "button"; del.className = "saved-del";
+      del.title = T("delSavedTitle"); del.textContent = "✕";
+      del.addEventListener("click", () => { Share.remove(e.name); renderSavedRoutes(); });
+      chip.append(load, del);
+      box.appendChild(chip);
+    }
+  }
+
+  $("saveroute").addEventListener("click", () => {
+    if (!route) return;
+    const ok = Share.save({
+      name: route.name, km: +route.km.toFixed(1), savedAt: Date.now(),
+      p: Share.encodePoints(route.rawPts),
+      e: route.rawEles ? route.rawEles.map(v => v == null ? null : Math.round(v)) : null,
+      set: currentSettings()
+    });
+    $("status").textContent = T(ok ? "savedOk" : "savedFail");
+    renderSavedRoutes();
+  });
+
+  $("sharelink").addEventListener("click", async () => {
+    if (!route) return;
+    /* de ruwe punten meesturen, zodat de ontvanger exact dezelfde route
+       (en dus dezelfde controleresultaten) opbouwt — de al vereenvoudigde
+       track opnieuw vereenvoudigen zou de geometrie verder afvlakken.
+       Enkel bij extreem gedetailleerde tracks eerst licht (±2 m)
+       vereenvoudigen om de link hanteerbaar te houden; hoogtes reizen
+       niet mee — de hoogtedienst vult ze bij de ontvanger aan */
+    let pts = route.rawPts;
+    if (pts.length > 5000) pts = Geom.simplify(pts, 0.00002);
+    const link = Share.buildLink({ name: route.name, p: Share.encodePoints(pts), ...currentSettings() });
+    try {
+      await navigator.clipboard.writeText(link);
+      $("status").textContent = T("linkCopied");
+    } catch (e) {
+      window.prompt(T("linkCopyManual"), link);   // vangnet zonder klembordtoegang
+    }
   });
 
   /* ---------------- ernst & weggebruiker ---------------- */
@@ -1803,6 +1903,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     }
     if (view) refresh();
     else $("status").textContent = route ? T("statusReady") : T("statusLoadFirst");
+    renderSavedRoutes();   // ✕-tooltips in de nieuwe taal
   });
 
   $("report").addEventListener("click", async () => {
@@ -1826,5 +1927,16 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     } finally {
       btn.disabled = false; btn.textContent = old;
     }
+  });
+
+  /* ---------------- opstart: bewaarde routes & gedeelde link ----------------
+     Ná DOMContentLoaded, want i18n.js overschrijft dan alle [data-i18n]-
+     teksten (o.a. #routeinfo) — eerder herstellen zou meteen weer
+     uitgewist worden. i18n registreerde zijn listener eerst en draait
+     dus gegarandeerd vóór deze. */
+  document.addEventListener("DOMContentLoaded", () => {
+    renderSavedRoutes();
+    const shared = Share.parseLink();
+    if (shared) restoreRoute(shared.name || T("sharedName"), shared.pts, null, shared.set, true);
   });
 })();
