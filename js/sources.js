@@ -40,7 +40,7 @@ const Sources = (() => {
 
   const stripHtml = s => String(s || "")
     .replace(/<br\s*\/?>/gi, " ").replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/&nbsp;/gi, " ").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&amp;/gi, "&")
     .replace(/\s+/g, " ").trim();
 
   const fetchJson = async (url, ms = 20000) => {
