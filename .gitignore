@@ -1,0 +1,6 @@
+# lokale Wrangler-cache (Cloudflare Workers CLI)
+worker/.wrangler/
+
+# lokale werkbestanden — niet voor het repo
+.claude/
+Instructions.md

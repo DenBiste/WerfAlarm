@@ -136,26 +136,48 @@
     const thresh = range === 0 ? 5 : range;   // bij 0 m: 5 m tolerantie voor gps-/tekenruis
     Geom.expandGrid(rt, 1 + Math.ceil(thresh / 250));
     const seen = new Map();
-    const { truncated, fromCache } = await GIPOD.query(rt.tiles, (f, col) => {
-      const s = GIPOD.summarize(f.properties || {}, col);
-      if (!relevantFor(s, modes)) return;   // filter tijdens de berekening: andere weggebruikers overslaan
-      if (onlyHard && !isHardFor(s, modes)) return;  // enkel blokkades voor deze weggebruikers
-      const res = Geom.analyzeGeom(rt, f.geometry, thresh);
+
+    /* Eén record verwerken (analyse t.o.v. de route + samenvoegen), gedeeld
+       door alle bronnen. `s` is een GIPOD.summarize-achtige samenvatting met
+       een `.source`, `.collection` en `.id`. `th` is de matchdrempel (voor
+       punt-bronnen ruimer, want een werf-marker ligt niet exact op de weg). */
+    const handleFeature = (geometry, s, th) => {
+      if (!relevantFor(s, modes)) return;
+      if (onlyHard && !isHardFor(s, modes)) return;
+      const res = Geom.analyzeGeom(rt, geometry, th);
       if (!res) return;
-      const key = col + "|" + (s.id || s.desc + s.start);
+      const key = s.collection + "|" + (s.id || s.desc + s.start);
       const kms = res.kms.map(m => m / 1000);
       const rec = seen.get(key);
       if (!rec) {
-        const [lon, lat] = firstCoord(f.geometry);
-        seen.set(key, { ...s, key, dist: Math.round(res.dist), kms, km: kms[0], lat, lon, geom: f.geometry });
+        const [lon, lat] = firstCoord(geometry);
+        seen.set(key, { ...s, key, dist: Math.round(res.dist), kms, km: kms[0], lat, lon, geom: geometry });
       } else {
         rec.kms = mergeKms(rec.kms, kms);
         rec.km = rec.kms[0];
         if (res.dist < rec.dist) rec.dist = Math.round(res.dist);
       }
-    }, onProgress || (() => {}));
+    };
 
-    /* enkel hinder die actief is op de gekozen ritdatum */
+    /* Vlaanderen — GIPOD (streaming per tegel) */
+    const { truncated, fromCache } = await GIPOD.query(rt.tiles, (f, col) =>
+      handleFeature(f.geometry, { ...GIPOD.summarize(f.properties || {}, col), source: "gipod" }, thresh),
+      onProgress || (() => {}));
+
+    /* Brussel / Wallonië — punt-bronnen, ruimere drempel (min. 150 m) */
+    const extra = Sources.relevant(rt);
+    const sourceErrors = [];
+    const ptThresh = Math.max(thresh, 150);
+    const lang = (window.I18N && I18N.lang === "en") ? "en" : "nl";
+    for (const src of extra) {
+      try {
+        const recs = await Sources.fetch(src, lang);
+        for (const rec of recs) handleFeature(rec.geometry, rec.summary, ptThresh);
+      } catch (e) { sourceErrors.push(src); }
+    }
+
+    /* enkel hinder die actief is op de gekozen ritdatum
+       (bronnen zonder datum → start/end null → altijd "actief") */
     const active = [];
     for (const r of seen.values()) {
       const st = r.start ? new Date(r.start) : null, en = r.end ? new Date(r.end) : null;
@@ -166,7 +188,7 @@
     const list = dedupe(active)
       .filter(r => relevantFor(r, modes))
       .filter(r => !onlyHard || isHardFor(r, modes));
-    return { list, keys: active.map(r => r.key), truncated, fromCache };
+    return { list, keys: active.map(r => r.key), truncated, fromCache, sources: ["gipod", ...extra], sourceErrors };
   }
 
   async function run() {
@@ -188,18 +210,23 @@
     };
     setP(0, 1);
 
-    let list, keys, truncated, fromCache;
+    let list, keys, truncated, fromCache, sources, sourceErrors;
     try {
-      ({ list, keys, truncated, fromCache } = await queryDisruptions(route, rideDate, modes, onlyHard, range, setP));
+      ({ list, keys, truncated, fromCache, sources, sourceErrors } = await queryDisruptions(route, rideDate, modes, onlyHard, range, setP));
     } catch (e) {
       $("error").style.display = "block";
       $("error").innerHTML = T("gipodFailHtml") + ` <span class="note">(${esc(e.message)})</span>`;
       $("run").disabled = false; $("status").textContent = T("statusFail");
       return;
     }
+    /* een externe bron die faalt mag de rest niet blokkeren — zachte melding */
+    if (sourceErrors && sourceErrors.length) {
+      $("error").style.display = "block";
+      $("error").innerHTML = `<span class="note">${esc(T("sourceFail", sourceErrors.map(s => T("src_" + s)).join(", ")))}</span>`;
+    }
     lastResults = list;
     view = { list, keys, rideDate, truncated, range, onlyHard, modes, filterHard: false, sortBy: "km",
-              startHour: $("starthour").value, endHour: $("endhour").value, fromCache, routeRef: route };
+              startHour: $("starthour").value, endHour: $("endhour").value, fromCache, routeRef: route, sources };
     refresh();
     $("run").disabled = false;
     $("dlgpx").disabled = false;   // route (evt. herroutet) blijft downloadbaar, ook zonder resterende hinder
@@ -262,10 +289,15 @@
     const merged = [];
     list.sort((a, b) => a.km - b.km || (a.collection === "HINDER" ? -1 : 1));
     for (const r of list) {
-      const sig = norm(r.desc) + "|" + d10(r.start) + "|" + d10(r.end);
+      /* GIPOD: zelfde omschrijving + periode = dezelfde werf (HINDER én
+         INNAME samenvoegen). Externe bronnen (Brussel/Wallonië) hebben geen
+         periode en soms herhaalde straatnamen → per bron-id uniek houden. */
+      const sig = (r.source === "bxl" || r.source === "wal")
+        ? r.source + "|" + r.id
+        : norm(r.desc) + "|" + d10(r.start) + "|" + d10(r.end);
       let target = bySig.get(sig);
-      if (!target) {
-        target = merged.find(o => o.collection !== r.collection &&
+      if (!target && r.start) {   // kruis-collectie enkel voor datum-dragende (GIPOD) records, binnen dezelfde bron
+        target = merged.find(o => o.source === r.source && o.collection !== r.collection &&
           o.kms.some(ok => r.kms.some(rk => Math.abs(ok - rk) < 0.15)) &&
           (d10(o.start) === d10(r.start) || d10(o.end) === d10(r.end)));
       }
@@ -320,7 +352,7 @@
         return {
           lat, lon,
           name: `WERF km ${km.toFixed(1)}` + (r.kms.length > 1 ? ` (${i + 1}/${r.kms.length})` : ""),
-          desc: `${r.desc} | ${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` +
+          desc: `${r.desc}` + ((r.start || r.end) ? ` | ${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` : "") +
                 (r.cons ? ` | ${String(r.cons).replace(/[;|]/g, " · ")}` : "")
         };
       }));
@@ -486,7 +518,8 @@
 
   /* ---------------- ernst & weggebruiker ---------------- */
   const MODES = { all: "alle weggebruikers", bike: "fietsers", ped: "voetgangers", motor: "gemotoriseerd verkeer" };
-  const HARD_RE = /afgesloten|afsluiting|closed|onderbroken|geen doorgang|versperd|omleiding/i;
+  /* NL/EN + FR (Brussel/Wallonië): afsluitingen, omleidingen, versperringen */
+  const HARD_RE = /afgesloten|afsluiting|closed|onderbroken|geen doorgang|versperd|omleiding|fermeture|ferm[ée]e?|barr[ée]e?|d[ée]viation|circulation interdite|voie ferm/i;
   const consText = r => r.cons ? String(r.cons).replace(/[;|]/g, " · ") : "";
   const consItems = r => String(r.cons || "").split(/[;|·,]/).map(s => s.trim()).filter(Boolean);
 
@@ -578,26 +611,34 @@
     const scope = range === 0 ? T("scope0") : T("scopeN", range);
     const dateStr = rideDate.toLocaleDateString(uiLoc());
 
+    const srcId = r => r.source || "gipod";
+    const srcBadge = r => `<span class="src-tag src-${srcId(r)}">${esc(T("src_" + srcId(r)))}</span>`;
+    const hasDates = r => r.start || r.end;
+
     const mk = r => {
       const hard = isHardFor(r, view.modes);
       const multi = r.kms.length > 1;
       const kmList = r.kms.map(k => k.toFixed(1)).join(" · ");
       const el = document.createElement("div"); el.className = "card" + (hard ? " hard" : "");
       const consTxt = consText(r);
+      const datePart = hasDates(r) ? `${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` : T("currentWorks");
+      /* omleidingsvoorstel enkel voor GIPOD: enkel daar is de geometrie de
+         echte werfzone; punt-bronnen (Brussel/Wallonië) zijn te grof */
+      const canReroute = srcId(r) === "gipod";
       el.innerHTML =
         `<div class="km"><b>${multi ? r.kms.length + "× KM" : "KM"}</b><span>${r.km.toFixed(1)}</span></div>
-         <div class="body"><h3>${esc(r.desc)}</h3>
-         <div class="meta">${r.cat ? `<b>${esc(r.cat)}</b> · ` : ""}${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` +
+         <div class="body"><h3>${srcBadge(r)}${esc(r.desc)}</h3>
+         <div class="meta">${r.cat ? `<b>${esc(r.cat)}</b> · ` : ""}${datePart}` +
         `${r.owner ? ` · ${esc(r.owner)}` : ""}${r.dist > 10 ? ` · ${T("fromTrack", r.dist)}` : ` · ${T("onTrack")}`}` +
         `${multi ? `<br><b>${esc(T("passages", r.kms.length, kmList))}</b>` : ""}</div>
          ${consTxt ? `<div class="cons">${hard ? "<em>" : ""}${esc(consTxt)}${hard ? "</em>" : ""}</div>` : ""}
          <span class="chip">${T("activeOn", dateStr)}</span>${hard ? `<span class="hardtag">${T("blockTag")}</span>` : ""}
-         <div class="alt-box">
+         ${canReroute ? `<div class="alt-box">
            <button type="button" class="btn-alt">${T("suggestAlt")}</button>
            <div class="alt-result" hidden></div>
-         </div></div>`;
+         </div>` : ""}</div>`;
 
-      const popup = `<b>km ${kmList} — ${esc(r.desc)}</b><br>${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}<br>${esc(consTxt)}`;
+      const popup = `<b>km ${kmList} — ${esc(r.desc)}</b><br>${hasDates(r) ? `${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}<br>` : ""}${esc(consTxt)}${consTxt ? "<br>" : ""}<em>${esc(T("src_" + srcId(r)))}</em>`;
       /* de getroffen zone zelf, zoals op geopunt.be/hinder-in-kaart */
       const zone = L.geoJSON(r.geom, {
         style: { color: hard ? "#A61E04" : "#D9480F", weight: 3, opacity: .9, fillColor: "#E8590C", fillOpacity: .35 },
@@ -622,7 +663,7 @@
       cardFocus.push(focus);
 
       const altBtn = el.querySelector(".btn-alt"), altResult = el.querySelector(".alt-result");
-      altBtn.addEventListener("click", ev => { ev.stopPropagation(); suggestAlternative(r, altBtn, altResult); });
+      if (altBtn) altBtn.addEventListener("click", ev => { ev.stopPropagation(); suggestAlternative(r, altBtn, altResult); });
 
       return el;
     };
@@ -824,11 +865,12 @@
       <text x="30" y="40" font-size="11" font-weight="bold" fill="#565E68">0</text>
       <text x="730" y="40" font-size="11" font-weight="bold" fill="#565E68" text-anchor="end">${route.km.toFixed(0)} km</text></svg>`;
 
+    const srcName = { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonië" };
     const rows = list.map(r => `
       <div class="c${isHardFor(r, view.modes) ? " hard" : ""}">
         <div class="ckm">${r.kms.length > 1 ? r.kms.length + "× KM" : "KM"}<br><b>${r.km.toFixed(1)}</b></div>
-        <div><h3>${esc(r.desc)}${isHardFor(r, view.modes) ? ' <span class="tag">⛔ Blokkade</span>' : ""}</h3>
-        <p>${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + esc(r.owner) : ""} · ${r.dist > 10 ? r.dist + " m van de track" : "op de track"}</p>
+        <div><h3><span class="src">${esc(srcName[r.source || "gipod"])}</span> ${esc(r.desc)}${isHardFor(r, view.modes) ? ' <span class="tag">⛔ Blokkade</span>' : ""}</h3>
+        <p>${(r.start || r.end) ? `${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` : "lopende werken"}${r.owner ? " · " + esc(r.owner) : ""} · ${r.dist > 10 ? r.dist + " m van de track" : "op de track"}</p>
         ${r.kms.length > 1 ? `<p><b>Passages:</b> km ${r.kms.map(k => k.toFixed(1)).join(" · ")}</p>` : ""}
         ${consText(r) ? `<p class="cons">${esc(consText(r))}</p>` : ""}
         <p class="lnk"><a href="https://www.google.com/maps?q=${r.lat.toFixed(5)},${r.lon.toFixed(5)}">Bekijk op kaart</a></p></div>
@@ -850,6 +892,7 @@
  .ckm b{font-size:17px}
  h3{margin:0 0 4px;font-size:16px}
  .tag{font-size:11px;background:#A61E04;color:#fff;border-radius:99px;padding:2px 9px;vertical-align:2px}
+ .src{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#EDECE5;border:1.5px solid #141619;border-radius:6px;padding:1px 6px;margin-right:6px;vertical-align:2px}
  p{margin:0 0 4px;font-size:13.5px;color:#565E68}
  .cons{color:#A61E04;font-weight:600}
  .lnk a{color:#2F5AA8;font-size:12.5px}
@@ -1000,6 +1043,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       freeTitle: "Vrije baan!", freeBody: d => `Geen hinder gevonden op deze route op ${d}. Goede rit!`,
       noBlocksTitle: "Geen blokkades!", noBlocksBody: d => `Geen afsluitingen of omleidingen op deze route op ${d} (lichtere hinder niet berekend).`,
       kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOKKADE]",
+      srcLbl: { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonie" }, currentWorks: "lopende werken",
       onTrack: "op de track", fromTrack: d => `${d} m van de track`,
       passages: l => `Passages: km ${l}`, viewMap: "Bekijk op kaart",
       truncNote: "Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.",
@@ -1075,6 +1119,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       freeTitle: "All clear!", freeBody: d => `No disruptions found on this route on ${d}. Enjoy the ride!`,
       noBlocksTitle: "No blockages!", noBlocksBody: d => `No closures or diversions on this route on ${d} (lighter disruptions were not calculated).`,
       kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOCKAGE]",
+      srcLbl: { gipod: "Flanders", bxl: "Brussels", wal: "Wallonia" }, currentWorks: "current works",
       onTrack: "on the track", fromTrack: d => `${d} m from the track`,
       passages: l => `Passages: km ${l}`, viewMap: "View on map",
       truncNote: "Note: at least one sub-area hit the 1000-object limit; results may be incomplete.",
@@ -1416,9 +1461,11 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       /* Belangrijk: splitTextToSize meet met het ACTIEVE font — dus vóór elke
          meting exact het font/formaat instellen waarmee de tekst ook wordt afgedrukt. */
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5);
-      const titleLines = doc.splitTextToSize(san(r.desc) + (hard ? "  " + RL.blockTag : ""), tW);
+      const srcPrefix = `[${(RL.srcLbl && RL.srcLbl[r.source || "gipod"]) || ""}] `;
+      const titleLines = doc.splitTextToSize(san(srcPrefix + r.desc) + (hard ? "  " + RL.blockTag : ""), tW);
       doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
-      const meta = san(`${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? RL.fromTrack(r.dist) : RL.onTrack}`);
+      const datePart = (r.start || r.end) ? `${GIPOD.fmtDate(r.start)} -> ${GIPOD.fmtDate(r.end)}` : RL.currentWorks;
+      const meta = san(`${datePart}${r.owner ? " · " + r.owner : ""} · ${r.dist > 10 ? RL.fromTrack(r.dist) : RL.onTrack}`);
       const metaLines = doc.splitTextToSize(meta, tW);
       const consLines = consText(r) ? doc.splitTextToSize(san(consText(r)), tW) : [];
       doc.setFont("helvetica", "bold");

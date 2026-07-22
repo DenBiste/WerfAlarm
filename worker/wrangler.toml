@@ -1,0 +1,6 @@
+name = "routescout-trafiroutes-proxy"
+main = "trafiroutes-proxy.js"
+compatibility_date = "2024-11-01"
+
+# No bindings, secrets, or environment variables are required.
+# Deploy with:  npx wrangler deploy
