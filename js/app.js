@@ -875,6 +875,9 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
     if (!jspdfPromise) jspdfPromise = new Promise((res, rej) => {
       const s = document.createElement("script");
       s.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+      s.integrity = "sha512-qZvrmS2ekKPF2mSznTQsxqPgnpkI4DNTlrdUmTzrDgektczlKNRRhy5X5AAOnx5S09ydFYWWNSfcEqDTTHgtNA==";
+      s.crossOrigin = "anonymous";
+      s.referrerPolicy = "no-referrer";
       s.onload = res;
       s.onerror = () => { jspdfPromise = null; rej(new Error("PDF-bibliotheek kon niet geladen worden")); };
       document.head.appendChild(s);
