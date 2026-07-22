@@ -20,9 +20,15 @@ const Sources = (() => {
   const BXL_WFS = "https://data.mobility.brussels/geoserver/bm_traffic/wfs" +
     "?service=WFS&version=2.0.0&request=GetFeature&typeNames=bm_traffic:worksites_comm" +
     "&outputFormat=application/json&srsName=EPSG:4326";
+  /* de uitgerolde Trafiroutes-proxy (worker/) — standaard voor iedereen;
+     de localStorage-sleutel blijft bruikbaar als ontwikkelaars-override */
+  const WAL_PROXY_DEFAULT = "https://routescout-trafiroutes-proxy.routescout.workers.dev";
   const WAL_PROXY_KEY = "routescout-wal-proxy";
 
-  const walProxy = () => { try { return (localStorage.getItem(WAL_PROXY_KEY) || "").trim(); } catch (e) { return ""; } };
+  const walProxy = () => {
+    try { return (localStorage.getItem(WAL_PROXY_KEY) || "").trim() || WAL_PROXY_DEFAULT; }
+    catch (e) { return WAL_PROXY_DEFAULT; }
+  };
 
   const bboxIntersects = (a, b) => !(a[2] < b[0] || a[0] > b[2] || a[3] < b[1] || a[1] > b[3]);
   function routeBBox(route) {

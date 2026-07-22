@@ -49,6 +49,35 @@ GET <worker-url>?lang=FR|NL      # description language (default FR)
 Returns a GeoJSON `FeatureCollection`; each feature is a `Point` with
 `properties: { id, kind, title, category }`.
 
+## Alternative: run it on a plain VM (e.g. Oracle Cloud Always Free)
+
+No Cloudflare account? The same code runs as a normal Node server —
+`server-node.mjs` wraps `trafiroutes-proxy.js` unchanged (Node ≥ 18) and adds a
+3-minute in-memory cache:
+
+```bash
+node server-node.mjs          # listens on :8787 (override with PORT=…)
+curl http://localhost:8787/?type=chantier
+```
+
+Because RouteScout itself is served over HTTPS, browsers block a plain-HTTP
+proxy (mixed content), so put a free HTTPS reverse proxy in front — e.g.
+[Caddy](https://caddyserver.com) with a free [DuckDNS](https://www.duckdns.org)
+hostname:
+
+```
+# /etc/caddy/Caddyfile
+yourname.duckdns.org {
+    reverse_proxy 127.0.0.1:8787
+}
+```
+
+Then set `localStorage["routescout-wal-proxy"] = "https://yourname.duckdns.org"`.
+Detailed Oracle Cloud (OCI Always Free) steps: create an Ubuntu VM, open
+TCP 80+443 in **both** the subnet's Security List **and** the VM's own
+iptables (OCI Ubuntu images ship with a restrictive ruleset), install
+Node + Caddy, run `server-node.mjs` under systemd.
+
 ## Source & attribution
 
 Data © [SPW / Trafiroutes](https://trafiroutes.wallonie.be) (Service public de
