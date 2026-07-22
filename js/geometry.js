@@ -259,14 +259,20 @@ const Geom = (() => {
   function findClimbs(profile) {
     if (!profile) return [];
     const { km, ele } = profile, n = ele.length, climbs = [];
+    /* Op quasi-vlak terrein (bv. Kempense zandstreek) daalt het profiel nergens
+       12 m binnen één keer, waardoor een klim anders eindeloos kan doorlopen
+       door kleine bultjes tientallen km aaneen te rijgen. Daarom eindigt een
+       klim ook zodra er te lang geen nieuwe top meer is. */
+    const STALL_KM = 1.5;
     let i = 0;
     while (i < n - 1) {
       if (ele[i + 1] <= ele[i]) { i++; continue; }
-      let j = i, top = i, topEle = ele[i];
+      let j = i, top = i, topEle = ele[i], lastTopKm = km[i];
       while (j < n - 1) {
         j++;
-        if (ele[j] > topEle) { topEle = ele[j]; top = j; }
+        if (ele[j] > topEle) { topEle = ele[j]; top = j; lastTopKm = km[j]; }
         if (topEle - ele[j] > Math.max(12, (topEle - ele[i]) * .3)) break;   // klim voorbij
+        if (km[j] - lastTopKm > STALL_KM) break;   // te lang geen nieuwe top: geen klim meer
       }
       const gain = topEle - ele[i], lenKm = km[top] - km[i];
       if (top > i && lenKm > 0.05 && (gain >= 20 || (gain >= 12 && gain / (lenKm * 10) >= 4))) {
