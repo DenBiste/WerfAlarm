@@ -134,7 +134,7 @@ export default {
         },
       });
     } catch (e) {
-      return new Response(JSON.stringify({ type: "FeatureCollection", features: [], error: String(e.message || e) }), {
+      return new Response(JSON.stringify({ type: "FeatureCollection", features: [], error: "Upstream fetch failed" }), {
         status: 502,
         headers: { ...cors, "Content-Type": "application/json; charset=utf-8" },
       });
