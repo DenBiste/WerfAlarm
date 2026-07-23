@@ -1,0 +1,36 @@
+# Ververst de Nederlandse wegwerkzaamhedendata (Melvin/NDW).
+# Downloadt de open-data planningsfeed, condenseert die met
+# scripts/build_nl_data.py tot gridcellen, en publiceert het resultaat
+# als één commit op de 'nl-data'-branch (geschiedenis blijft klein).
+# De app leest de cellen via raw.githubusercontent.com (CORS-vrij).
+name: NL wegwerkzaamheden data
+
+on:
+  schedule:
+    - cron: "20 4,10,16,22 * * *"   # 4× per dag — planningsdata, geen realtime
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download NDW planningsfeed
+        run: curl -sSf --retry 3 -o feed.xml.gz "https://opendata.ndw.nu/planningsfeed_wegwerkzaamheden_en_evenementen.xml.gz"
+
+      - name: Build grid cells
+        run: python3 scripts/build_nl_data.py feed.xml.gz out
+
+      - name: Publish to nl-data branch (single commit)
+        run: |
+          cd out
+          git init -q -b nl-data
+          git config user.name "nl-data bot"
+          git config user.email "actions@github.com"
+          git add nl
+          git commit -q -m "NL wegwerkzaamheden $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" nl-data

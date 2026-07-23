@@ -75,7 +75,7 @@ const I18N = (() => {
       statusLoadFirst: "Laad eerst een GPX-bestand.", statusReady: "Klaar om te controleren.",
       statusQuery: (d, t) => `Bevraagt bronnen… ${d}/${t}`, statusFail: "Mislukt.",
       /* ---------- hinderbronnen (regio's) ---------- */
-      src_gipod: "Vlaanderen", src_bxl: "Brussel", src_wal: "Wallonië",
+      src_gipod: "Vlaanderen", src_bxl: "Brussel", src_wal: "Wallonië", src_nl: "Nederland",
       currentWorks: "lopende werken",
       sourceFail: s => `Kon ${s} niet bevragen — resultaten mogelijk onvolledig.`,
       statusDone: (n, hard, who, d, cache) => `Klaar — ${n} ${hard ? "blokkade(s)" : "hinder(s)"}${who} actief op ${d}.${cache}`,
@@ -121,7 +121,7 @@ const I18N = (() => {
       hourlyHeader: "Uur per uur", windHeader: "De wind onderweg",
       /* ---------- footer ---------- */
       footTag: "jouw verkenner op kop — werven, klimmen & weer",
-      footSrc: `Bronnen werven: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD</a> (Vlaanderen), <a href="https://data.mobility.brussels" target="_blank" rel="noopener">Bruxelles Mobilité</a> (Brussel), <a href="https://trafiroutes.wallonie.be" target="_blank" rel="noopener">Trafiroutes</a> (Wallonië) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (hoogte &amp; weer). Kaart © OpenStreetMap.`
+      footSrc: `Bronnen werven: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD</a> (Vlaanderen), <a href="https://data.mobility.brussels" target="_blank" rel="noopener">Bruxelles Mobilité</a> (Brussel), <a href="https://trafiroutes.wallonie.be" target="_blank" rel="noopener">Trafiroutes</a> (Wallonië), <a href="https://melvin.ndw.nu/public" target="_blank" rel="noopener">Melvin/NDW</a> (Nederland) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (hoogte &amp; weer). Kaart © OpenStreetMap.`
     },
     en: {
       locale: "en-GB",
@@ -174,7 +174,7 @@ const I18N = (() => {
       layBlocks: "🚧 Blockages & disruptions", layProfile: "⛰️ Elevation profile", layWeather: "🌤️ Weather & wind",
       statusLoadFirst: "Load a GPX file first.", statusReady: "Ready to check.",
       statusQuery: (d, t) => `Querying sources… ${d}/${t}`, statusFail: "Failed.",
-      src_gipod: "Flanders", src_bxl: "Brussels", src_wal: "Wallonia",
+      src_gipod: "Flanders", src_bxl: "Brussels", src_wal: "Wallonia", src_nl: "Netherlands",
       currentWorks: "current works",
       sourceFail: s => `Could not query ${s} — results may be incomplete.`,
       statusDone: (n, hard, who, d, cache) => `Done — ${n} ${hard ? "blockage(s)" : "disruption(s)"}${who} active on ${d}.${cache}`,
@@ -217,7 +217,7 @@ const I18N = (() => {
       weerNoData: "The weather forecast could not be retrieved. Check your weather app before departure.",
       hourlyHeader: "Hour by hour", windHeader: "The wind along the way",
       footTag: "your scout up the road — roadworks, climbs & weather",
-      footSrc: `Roadwork sources: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD</a> (Flanders), <a href="https://data.mobility.brussels" target="_blank" rel="noopener">Bruxelles Mobilité</a> (Brussels), <a href="https://trafiroutes.wallonie.be" target="_blank" rel="noopener">Trafiroutes</a> (Wallonia) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (elevation &amp; weather). Map © OpenStreetMap.`
+      footSrc: `Roadwork sources: <a href="https://www.geopunt.be/hinder-in-kaart" target="_blank" rel="noopener">GIPOD</a> (Flanders), <a href="https://data.mobility.brussels" target="_blank" rel="noopener">Bruxelles Mobilité</a> (Brussels), <a href="https://trafiroutes.wallonie.be" target="_blank" rel="noopener">Trafiroutes</a> (Wallonia), <a href="https://melvin.ndw.nu/public" target="_blank" rel="noopener">Melvin/NDW</a> (Netherlands) &amp; <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (elevation &amp; weather). Map © OpenStreetMap.`
     }
   };
 
