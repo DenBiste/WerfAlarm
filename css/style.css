@@ -177,6 +177,7 @@ a{color:inherit}
 .src-gipod{background:#E8F0FE;color:#1E4D8C}
 .src-bxl{background:#FCE8EF;color:#8A1E4D}
 .src-wal{background:#FFF1D6;color:#8A5A00}
+.src-nl{background:#E6F4EA;color:#1B5E3A}
 
 .bar{height:8px;background:var(--soft);border-inline:2px solid var(--ink)}
 .bar i{display:block;height:100%;width:0;transition:width .3s;

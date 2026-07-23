@@ -164,15 +164,20 @@
       handleFeature(f.geometry, { ...GIPOD.summarize(f.properties || {}, col), source: "gipod" }, thresh),
       onProgress || (() => {}));
 
-    /* Brussel / Wallonië — punt-bronnen, ruimere drempel (min. 150 m) */
+    /* Brussel / Wallonië / Nederland. Drempel per record naar geometrie-
+       type: een punt-marker ligt niet exact op de weg → ruimer (min.
+       150 m); echte lijn-geometrie (o.a. Nederland) → gewone drempel. */
     const extra = Sources.relevant(rt);
     const sourceErrors = [];
     const ptThresh = Math.max(thresh, 150);
     const lang = (window.I18N && I18N.lang === "en") ? "en" : "nl";
     for (const src of extra) {
       try {
-        const recs = await Sources.fetch(src, lang);
-        for (const rec of recs) handleFeature(rec.geometry, rec.summary, ptThresh);
+        const recs = await Sources.fetch(src, lang, rt);
+        for (const rec of recs) {
+          const th = (rec.geometry && rec.geometry.type === "Point") ? ptThresh : thresh;
+          handleFeature(rec.geometry, rec.summary, th);
+        }
       } catch (e) { sourceErrors.push(src); }
     }
 
@@ -290,9 +295,11 @@
     list.sort((a, b) => a.km - b.km || (a.collection === "HINDER" ? -1 : 1));
     for (const r of list) {
       /* GIPOD: zelfde omschrijving + periode = dezelfde werf (HINDER én
-         INNAME samenvoegen). Externe bronnen (Brussel/Wallonië) hebben geen
-         periode en soms herhaalde straatnamen → per bron-id uniek houden. */
-      const sig = (r.source === "bxl" || r.source === "wal")
+         INNAME samenvoegen). Externe bronnen (Brussel/Wallonië/Nederland)
+         hebben een stabiel bron-id en soms een generieke omschrijving
+         ("Wegwerkzaamheden") → per bron-id uniek houden, nooit op
+         omschrijving samenvoegen. */
+      const sig = (r.source && r.source !== "gipod")
         ? r.source + "|" + r.id
         : norm(r.desc) + "|" + d10(r.start) + "|" + d10(r.end);
       let target = bySig.get(sig);
@@ -624,7 +631,10 @@
       const datePart = hasDates(r) ? `${GIPOD.fmtDate(r.start)} → ${GIPOD.fmtDate(r.end)}` : T("currentWorks");
       /* omleidingsvoorstel enkel voor GIPOD: enkel daar is de geometrie de
          echte werfzone; punt-bronnen (Brussel/Wallonië) zijn te grof */
-      const canReroute = srcId(r) === "gipod";
+      /* omleiding vereist een echte zone-/lijngeometrie; punt-markers
+         (Brussel/Wallonië) niet — Nederland heeft wél lijngeometrie */
+      const canReroute = (srcId(r) === "gipod" || srcId(r) === "nl")
+        && r.geom && r.geom.type !== "Point";
       el.innerHTML =
         `<div class="km"><b>${multi ? r.kms.length + "× KM" : "KM"}</b><span>${r.km.toFixed(1)}</span></div>
          <div class="body"><h3>${srcBadge(r)}${esc(r.desc)}</h3>
@@ -865,7 +875,7 @@
       <text x="30" y="40" font-size="11" font-weight="bold" fill="#565E68">0</text>
       <text x="730" y="40" font-size="11" font-weight="bold" fill="#565E68" text-anchor="end">${route.km.toFixed(0)} km</text></svg>`;
 
-    const srcName = { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonië" };
+    const srcName = { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonië", nl: "Nederland" };
     const rows = list.map(r => `
       <div class="c${isHardFor(r, view.modes) ? " hard" : ""}">
         <div class="ckm">${r.kms.length > 1 ? r.kms.length + "× KM" : "KM"}<br><b>${r.km.toFixed(1)}</b></div>
@@ -1043,7 +1053,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       freeTitle: "Vrije baan!", freeBody: d => `Geen hinder gevonden op deze route op ${d}. Goede rit!`,
       noBlocksTitle: "Geen blokkades!", noBlocksBody: d => `Geen afsluitingen of omleidingen op deze route op ${d} (lichtere hinder niet berekend).`,
       kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOKKADE]",
-      srcLbl: { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonie" }, currentWorks: "lopende werken",
+      srcLbl: { gipod: "Vlaanderen", bxl: "Brussel", wal: "Wallonie", nl: "Nederland" }, currentWorks: "lopende werken",
       onTrack: "op de track", fromTrack: d => `${d} m van de track`,
       passages: l => `Passages: km ${l}`, viewMap: "Bekijk op kaart",
       truncNote: "Let op: minstens één deelgebied bereikte de limiet van 1000 objecten; mogelijk onvolledig.",
@@ -1119,7 +1129,7 @@ Gegenereerd met RouteScout; de situatie kan wijzigen, controleer kort voor vertr
       freeTitle: "All clear!", freeBody: d => `No disruptions found on this route on ${d}. Enjoy the ride!`,
       noBlocksTitle: "No blockages!", noBlocksBody: d => `No closures or diversions on this route on ${d} (lighter disruptions were not calculated).`,
       kmLbl: "KM", kmMulti: n => `${n}x KM`, blockTag: "[BLOCKAGE]",
-      srcLbl: { gipod: "Flanders", bxl: "Brussels", wal: "Wallonia" }, currentWorks: "current works",
+      srcLbl: { gipod: "Flanders", bxl: "Brussels", wal: "Wallonia", nl: "Netherlands" }, currentWorks: "current works",
       onTrack: "on the track", fromTrack: d => `${d} m from the track`,
       passages: l => `Passages: km ${l}`, viewMap: "View on map",
       truncNote: "Note: at least one sub-area hit the 1000-object limit; results may be incomplete.",
